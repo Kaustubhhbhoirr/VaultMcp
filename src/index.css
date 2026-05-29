@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Custom Retro CSS Stylesheets */
+
+:root {
+  font-family: 'JetBrains Mono', monospace;
+  background-color: #bfb5a3;
+  color: #1a1a1a;
+}
+
+body {
+  background-color: #bfb5a3;
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 2px hard border */
+.retro-border {
+  border: 2px solid #000000 !important;
+}
+
+.retro-border-t {
+  border-top: 2px solid #000000 !important;
+}
+
+.retro-border-b {
+  border-bottom: 2px solid #000000 !important;
+}
+
+.retro-border-r {
+  border-right: 2px solid #000000 !important;
+}
+
+.retro-border-l {
+  border-left: 2px solid #000000 !important;
+}
+
+/* 3px hard shadow (outset) */
+.retro-outset {
+  box-shadow: 3px 3px 0px 0px rgba(0, 0, 0, 1) !important;
+}
+
+/* 4px hard shadow (window card) */
+.window-shadow {
+  box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 1) !important;
+}
+
+/* Inset inputs and textareas (inset shadow) */
+.retro-inset {
+  box-shadow: inset 2px 2px 0px 0px rgba(0, 0, 0, 1) !important;
+}
+
+.retro-inset-light {
+  box-shadow: inset 2px 2px 0px 0px rgba(0, 0, 0, 0.2) !important;
+}
+
+.retro-inset-medium {
+  box-shadow: inset 2px 2px 0px 0px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Active buttons animation */
+.active-press {
+  transition: all 0.05s ease-in-out;
+}
+
+.active-press:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: none !important;
+}
+
+/* Micro-interaction window controls */
+.window-control:active {
+  transform: translate(1px, 1px);
+}
+
+/* Custom scrollbars */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 12px;
+  background: #d4cabb;
+  border-left: 2px solid #000;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #bfb5a3;
+  border: 2px solid #000;
+}
+
+/* Mobile-specific canvas wrapping if needed */
+.mobile-canvas {
+  width: 375px;
+  min-height: 812px;
+  margin: 0 auto;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Flickering scanline effect for retro vibe */
+.scanline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.05) 50%
+  );
+  background-size: 100% 4px;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+}
