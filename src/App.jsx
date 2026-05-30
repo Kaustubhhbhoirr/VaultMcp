@@ -5,8 +5,9 @@ import ChatScreen from './screens/ChatScreen';
 import VaultScreen from './screens/VaultScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import StatusBar from './components/StatusBar';
+import AuthCallback from './screens/AuthCallback';
 import { isValidUrl, formatRetroDate } from './utils/helpers';
-import { processContent, saveToDrive, getVaultFromDrive, getGoogleAuthUrl, exchangeGoogleAuthCode } from './utils/api';
+import { processContent, saveToDrive, getVaultFromDrive, getGoogleAuthUrl, exchangeGoogleAuthCode, healthCheck } from './utils/api';
 
 // Initial chat history matching the designs
 const INITIAL_MESSAGES = [
@@ -41,6 +42,10 @@ const INITIAL_MESSAGES = [
 ];
 
 export default function App() {
+  if (window.location.pathname === '/auth/callback') {
+    return <AuthCallback />;
+  }
+
   const [user, setUser] = useLocalStorage('vaultmcp_user', {
     name: '',
     hfToken: '',
@@ -54,6 +59,28 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'vault' | 'settings'
   const [sharedInput, setSharedInput] = useState('');
   const hasProcessedShare = useRef(false);
+  const [isBackendOnline, setIsBackendOnline] = useState(false);
+
+  // ─── Health check for backend ───────────────────────────────────────────
+  useEffect(() => {
+    let active = true;
+    const checkHealth = async () => {
+      try {
+        await healthCheck();
+        if (active) setIsBackendOnline(true);
+      } catch (err) {
+        if (active) setIsBackendOnline(false);
+      }
+    };
+
+    checkHealth();
+    const interval = setInterval(checkHealth, 5000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   // ─── Real API call: process content ───────────────────────────────────
   const handleSendMessage = useCallback(async (text) => {
@@ -199,40 +226,55 @@ export default function App() {
   const handleConnectDrive = async () => {
     try {
       const authUrl = await getGoogleAuthUrl();
-      // Open Google OAuth consent in a popup
       const popup = window.open(authUrl, 'google-oauth', 'width=500,height=600');
 
-      // Listen for the redirect with auth code
-      const checkPopup = setInterval(async () => {
-        try {
-          if (popup.closed) {
-            clearInterval(checkPopup);
-            return;
-          }
-          const popupUrl = popup.location.href;
-          if (popupUrl.includes('code=')) {
-            clearInterval(checkPopup);
-            const popupParams = new URLSearchParams(new URL(popupUrl).search);
-            const authCode = popupParams.get('code');
-            popup.close();
+      const handleAuthMessage = async (event) => {
+        if (event.origin !== window.location.origin) return;
 
-            if (authCode) {
-              const tokens = await exchangeGoogleAuthCode(authCode);
-              setUser(prev => ({
-                ...prev,
-                isDriveConnected: true,
-                driveAccessToken: tokens.access_token,
-                driveRefreshToken: tokens.refresh_token || '',
-              }));
-            }
+        if (event.data && event.data.type === 'GOOGLE_AUTH_CODE') {
+          const authCode = event.data.code;
+          window.removeEventListener('message', handleAuthMessage);
+
+          try {
+            const tokens = await exchangeGoogleAuthCode(authCode);
+            setUser(prev => ({
+              ...prev,
+              isDriveConnected: true,
+              driveAccessToken: tokens.access_token,
+              driveRefreshToken: tokens.refresh_token || '',
+            }));
+            
+            alert("Google Drive authorized successfully!");
+          } catch (err) {
+            console.error('[VaultMCP] Drive auth token exchange failed:', err);
+            setMessages(prev => [...prev, {
+              sender: 'system',
+              isError: true,
+              text: `● ERROR — Token exchange failed: ${err.message}`,
+            }]);
           }
-        } catch (_) {
-          // Cross-origin — popup hasn't redirected yet, keep polling
+        } else if (event.data && event.data.type === 'GOOGLE_AUTH_ERROR') {
+          window.removeEventListener('message', handleAuthMessage);
+          setMessages(prev => [...prev, {
+            sender: 'system',
+            isError: true,
+            text: `● ERROR — Google Auth rejected: ${event.data.error}`,
+          }]);
         }
-      }, 500);
+      };
+
+      window.addEventListener('message', handleAuthMessage);
+
+      // Remove listener if popup closed manually
+      const checkClosed = setInterval(() => {
+        if (popup && popup.closed) {
+          clearInterval(checkClosed);
+          window.removeEventListener('message', handleAuthMessage);
+        }
+      }, 1000);
+
     } catch (err) {
       console.error('[VaultMCP] Drive auth error:', err.message);
-      // Add error message to chat
       setMessages(prev => [...prev, {
         sender: 'system',
         isError: true,
@@ -268,8 +310,12 @@ export default function App() {
     return (
       <div className="mobile-canvas flex flex-col justify-between min-h-screen bg-background-base relative">
         <div className="scanline" />
-        <OnboardingScreen onComplete={handleOnboardingComplete} onConnectDrive={handleConnectDrive} />
-        <StatusBar leftLabel="AWAITING SYSTEM INITIALIZATION" rightLabel="OFFLINE" isOk={false} />
+        <OnboardingScreen onComplete={handleOnboardingComplete} onConnectDrive={handleConnectDrive} isDriveConnected={user.isDriveConnected} />
+        <StatusBar 
+          leftLabel={isBackendOnline ? "SYSTEM INITIALIZED" : "AWAITING SYSTEM INITIALIZATION"} 
+          rightLabel={isBackendOnline ? "ONLINE" : "OFFLINE"} 
+          isOk={isBackendOnline} 
+        />
       </div>
     );
   }
@@ -349,12 +395,24 @@ export default function App() {
       {/* Global Status Footer */}
       <div className="shrink-0 select-none">
         {/* Status Bar */}
-        <div className="bg-primary-container h-8 border-t-2 border-b-2 border-black flex justify-between items-center px-4">
+        <div className={`h-8 border-t-2 border-b-2 border-black flex justify-between items-center px-4 transition-colors ${
+          isBackendOnline ? 'bg-primary-container' : 'bg-status-error text-white'
+        }`}>
           <div className="flex items-center gap-2">
-            <span className="w-2 h-2 bg-on-primary-fixed border border-black animate-pulse"></span>
-            <span className="text-[10px] font-bold text-on-primary-fixed uppercase">SYSTEM OK</span>
+            <span className={`w-2 h-2 border border-black animate-pulse ${
+              isBackendOnline ? 'bg-on-primary-fixed' : 'bg-white'
+            }`}></span>
+            <span className={`text-[10px] font-bold uppercase ${
+              isBackendOnline ? 'text-on-primary-fixed' : 'text-white'
+            }`}>
+              {isBackendOnline ? 'SYSTEM OK' : 'SYSTEM OFFLINE'}
+            </span>
           </div>
-          <span className="text-[10px] font-bold text-on-primary-fixed uppercase tracking-tight">ALL SYSTEMS READY</span>
+          <span className={`text-[10px] font-bold uppercase tracking-tight ${
+            isBackendOnline ? 'text-on-primary-fixed' : 'text-white'
+          }`}>
+            {isBackendOnline ? 'ALL SYSTEMS READY' : 'BACKEND CONNECTION LOST'}
+          </span>
         </div>
         
         {/* Bottom Nav Bar */}
@@ -401,6 +459,11 @@ function parseVaultMd(mdContent) {
 
   // Split by ### headers (each entry)
   const sections = mdContent.split(/^### /m).filter(s => s.trim());
+  
+  if (sections.length > 0 && sections[0].includes('# VaultMCP Vault')) {
+    sections.shift();
+  }
+
   let currentCategory = 'OTHER';
 
   for (const section of sections) {
@@ -419,6 +482,7 @@ function parseVaultMd(mdContent) {
     let sourceUrl = '';
     let officialLink = '';
     let savedOn = '';
+    let toolsMentioned = '';
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -429,6 +493,8 @@ function parseVaultMd(mdContent) {
         if (officialLink === 'N/A') officialLink = '';
       } else if (trimmed.startsWith('- Source:')) {
         sourceUrl = trimmed.replace('- Source:', '').trim();
+      } else if (trimmed.startsWith('- Tools mentioned:')) {
+        toolsMentioned = trimmed.replace('- Tools mentioned:', '').trim();
       } else if (trimmed.startsWith('- Saved on:')) {
         savedOn = trimmed.replace('- Saved on:', '').trim();
       }
@@ -451,6 +517,7 @@ function parseVaultMd(mdContent) {
       summary,
       sourceUrl: sourceUrl || officialLink,
       officialLink,
+      toolsMentioned,
       locked: false,
     });
   }

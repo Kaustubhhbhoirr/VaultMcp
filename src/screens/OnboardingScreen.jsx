@@ -1,16 +1,9 @@
 import React, { useState } from 'react';
 import WindowFrame from '../components/WindowFrame';
 
-export default function OnboardingScreen({ onComplete }) {
+export default function OnboardingScreen({ onComplete, onConnectDrive, isDriveConnected }) {
   const [name, setName] = useState('');
   const [hfToken, setHfToken] = useState('');
-  const [isDriveConnected, setIsDriveConnected] = useState(false);
-
-  const handleConnectDrive = () => {
-    // Simulate connection
-    setIsDriveConnected(true);
-    alert("Google Drive authorized successfully!");
-  };
 
   const handleStart = () => {
     if (!name.trim()) {
@@ -52,7 +45,7 @@ export default function OnboardingScreen({ onComplete }) {
             <div className="space-y-2 mb-6">
               <label className="font-label-caps text-label-caps block text-on-surface uppercase tracking-wider">Step 2</label>
               <button 
-                onClick={handleConnectDrive}
+                onClick={onConnectDrive}
                 className={`w-full h-14 font-headline-md text-headline-md uppercase retro-border retro-outset active-press transition-all ${
                   isDriveConnected 
                     ? 'bg-status-success text-text-main' 

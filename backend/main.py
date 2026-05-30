@@ -61,7 +61,7 @@ from drive_handler import (
 # ─── Load Environment ────────────────────────────────────────────────────────
 load_dotenv()
 
-CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000").split(",")
 
 # ─── App Instance ────────────────────────────────────────────────────────────
 app = FastAPI(
@@ -211,6 +211,17 @@ async def scrape_website(url: str) -> str:
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
 
+@app.get("/")
+async def root_index():
+    """Welcome page / status."""
+    return {
+        "status": "running",
+        "service": "vaultmcp-backend",
+        "message": "Welcome to VaultMCP API. System is active and healthy.",
+        "documentation": "/docs"
+    }
+
+
 @app.get("/health")
 async def health_check():
     """System health check."""
@@ -344,7 +355,7 @@ async def process_content(request: ProcessRequest):
             raise HTTPException(status_code=422, detail=f"AI processing failed: {e}")
 
         # ── Step 5: Web search for official link ─────────────────────
-        official_info = get_official_info(processed.title)
+        official_info = get_official_info(processed.official_link)
         official_link = official_info.get("official_link", "")
         pipeline_steps.append({
             "step": 5, "name": "web_search", "status": "done" if official_link else "no_results",
@@ -421,7 +432,7 @@ async def process_file(
     except ProcessingError as e:
         raise HTTPException(status_code=422, detail=f"AI processing failed: {e}")
 
-    official_info = get_official_info(processed.title)
+    official_info = get_official_info(processed.official_link)
     official_link = official_info.get("official_link", "")
 
     entry = build_entry(

@@ -1,17 +1,12 @@
 import React, { useState } from 'react';
 
-export default function SettingsScreen({ user, onUpdateUser, onClearVault }) {
+export default function SettingsScreen({ user, onUpdateUser, onClearVault, onConnectDrive }) {
   const [displayName, setDisplayName] = useState(user.name || '');
 
   const handleNameChange = (e) => {
     const val = e.target.value;
     setDisplayName(val);
     onUpdateUser({ name: val });
-  };
-
-  const handleReconnectDrive = () => {
-    onUpdateUser({ isDriveConnected: true });
-    alert("Google Drive access re-authorized!");
   };
 
   const handleUpdateToken = () => {
@@ -69,7 +64,7 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault }) {
               </div>
             </div>
             <button 
-              onClick={handleReconnectDrive}
+              onClick={onConnectDrive}
               className="bg-surface-variant text-on-surface retro-border px-3 py-1 font-label-caps text-[10px] retro-outset active-press cursor-pointer"
             >
               {user.isDriveConnected ? 'RECONNECT' : 'CONNECT'}

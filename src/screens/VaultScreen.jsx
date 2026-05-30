@@ -21,15 +21,83 @@ export default function VaultScreen({ vaultItems }) {
   };
 
   const handleDownloadVault = () => {
-    // Generate simple markdown structure
-    const mdContent = vaultItems.map(item => {
-      return `## ${item.title} [${item.category}] - ${item.date}
-${item.summary || item.text}
-Source: ${item.sourceUrl || 'N/A'}
----`;
-    }).join('\n\n');
+    const CATEGORIES_ORDER = [
+      "AI Tools",
+      "Prompts",
+      "APIs & Libraries",
+      "Frameworks",
+      "UI Design",
+      "Tips & Tricks",
+      "Other"
+    ];
 
-    const blob = new Blob([mdContent], { type: 'text/markdown' });
+    // Helper to normalize/match category names case-insensitively
+    const getNormalizedCategory = (cat) => {
+      if (!cat) return "Other";
+      const cleaned = cat.trim().toLowerCase();
+      if (cleaned === 'ai tools') return 'AI Tools';
+      if (cleaned === 'prompts') return 'Prompts';
+      if (cleaned === 'apis & libraries' || cleaned === 'apis') return 'APIs & Libraries';
+      if (cleaned === 'frameworks') return 'Frameworks';
+      if (cleaned === 'ui design') return 'UI Design';
+      if (cleaned === 'tips & tricks') return 'Tips & Tricks';
+      return 'Other';
+    };
+
+    // Group items
+    const grouped = {};
+    CATEGORIES_ORDER.forEach(cat => {
+      grouped[cat] = [];
+    });
+
+    vaultItems.forEach(item => {
+      const cat = getNormalizedCategory(item.category);
+      if (!grouped[cat]) {
+        grouped[cat] = [];
+      }
+      grouped[cat].push(item);
+    });
+
+    let mdContent = `# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n\n---\n\n`;
+
+    let hasEntries = false;
+    CATEGORIES_ORDER.forEach(category => {
+      const entries = grouped[category];
+      if (entries && entries.length > 0) {
+        hasEntries = true;
+        mdContent += `## [CATEGORY: ${category}]\n\n`;
+        entries.forEach(entry => {
+          mdContent += `### ${entry.title}\n`;
+          mdContent += `- Summary: ${entry.summary || ''}\n`;
+          mdContent += `- Official link: ${entry.officialLink || 'N/A'}\n`;
+          if (entry.sourceUrl) {
+            mdContent += `- Source: ${entry.sourceUrl}\n`;
+          }
+          if (entry.toolsMentioned) {
+            mdContent += `- Tools mentioned: ${entry.toolsMentioned}\n`;
+          }
+          mdContent += `- Saved on: ${entry.date || ''}\n\n`;
+        });
+        mdContent += `---\n\n`;
+      }
+    });
+
+    // If there were no entries grouped by CATEGORIES_ORDER, but we had items, let's group them under Other or output them anyway
+    if (!hasEntries && vaultItems.length > 0) {
+      mdContent += `## [CATEGORY: Other]\n\n`;
+      vaultItems.forEach(entry => {
+        mdContent += `### ${entry.title}\n`;
+        mdContent += `- Summary: ${entry.summary || ''}\n`;
+        mdContent += `- Official link: ${entry.officialLink || 'N/A'}\n`;
+        if (entry.sourceUrl) {
+          mdContent += `- Source: ${entry.sourceUrl}\n`;
+        }
+        mdContent += `- Saved on: ${entry.date || ''}\n\n`;
+      });
+      mdContent += `---\n\n`;
+    }
+
+    const blob = new Blob([mdContent.trim() + '\n'], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;

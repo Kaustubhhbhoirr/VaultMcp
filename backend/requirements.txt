@@ -9,7 +9,7 @@ uvicorn[standard]
 # ─── Audio Extraction ───────────────────────────────────
 yt-dlp
 
-# ─── HTTP Client (HF API, Tavily, Serper, web scraping) ─
+# ─── HTTP Client (HF API, web scraping) ─
 httpx
 
 # ─── Google Drive Integration ───────────────────────────

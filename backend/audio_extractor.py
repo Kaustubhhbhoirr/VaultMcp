@@ -19,6 +19,7 @@ import os
 import re
 import uuid
 import tempfile
+import shutil
 from dataclasses import dataclass
 from typing import Optional
 
@@ -133,20 +134,24 @@ def extract_audio(url: str) -> ExtractionResult:
     temp_dir = _get_temp_dir()
     output_template = os.path.join(temp_dir, f"vaultmcp_{file_id}")
 
-    # yt-dlp options: audio only, convert to mp3, no video
+    # Detect if ffmpeg is available
+    ffmpeg_available = shutil.which("ffmpeg") is not None
+    preferred_ext = "mp3" if ffmpeg_available else "m4a"
+    postprocessors = []
+
+    if ffmpeg_available:
+        postprocessors.append({
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "128",
+        })
+
+    # yt-dlp options: audio only, convert to mp3 if ffmpeg is present, otherwise native m4a
     ydl_opts = {
         # Extract audio only — no video download
-        "format": "bestaudio/best",
+        "format": "bestaudio[ext=m4a]/bestaudio/best" if not ffmpeg_available else "bestaudio/best",
         "outtmpl": f"{output_template}.%(ext)s",
-
-        # Post-process: convert to mp3
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "128",
-            }
-        ],
+        "postprocessors": postprocessors,
 
         # Suppress terminal output (we handle errors ourselves)
         "quiet": True,
@@ -220,23 +225,23 @@ def extract_audio(url: str) -> ExtractionResult:
             f"Unexpected error extracting audio from {url}: {e}"
         ) from e
 
-    # Find the output .mp3 file
-    expected_mp3 = f"{output_template}.mp3"
+    # Find the output audio file
+    expected_path = f"{output_template}.{preferred_ext}"
 
-    if not os.path.exists(expected_mp3):
+    if not os.path.exists(expected_path):
         # yt-dlp sometimes uses a slightly different name — scan the temp dir
         for filename in os.listdir(temp_dir):
-            if filename.startswith(f"vaultmcp_{file_id}") and filename.endswith(".mp3"):
-                expected_mp3 = os.path.join(temp_dir, filename)
+            if filename.startswith(f"vaultmcp_{file_id}") and filename.endswith((".mp3", ".m4a", ".webm")):
+                expected_path = os.path.join(temp_dir, filename)
                 break
         else:
             raise ExtractionError(
-                f"Audio extraction completed but .mp3 file not found at {expected_mp3}. "
-                "FFmpeg may not be installed or the conversion failed."
+                f"Audio extraction completed but file not found. "
+                f"FFmpeg may not be installed or the download failed."
             )
 
     return ExtractionResult(
-        audio_path=expected_mp3,
+        audio_path=expected_path,
         source_url=url,
         platform=platform,
         title=title,

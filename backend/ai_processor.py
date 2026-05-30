@@ -70,6 +70,7 @@ class ProcessedContent:
     title: str
     category: str
     summary: str
+    official_link: str = ""
     tools_mentioned: List[str] = field(default_factory=list)
     links_mentioned: List[str] = field(default_factory=list)
     raw_text: str = ""             # Original input text
@@ -79,35 +80,25 @@ class ProcessedContent:
 
 # ─── Prompt Construction ─────────────────────────────────────────────────────
 
-SYSTEM_PROMPT = """You are a content analysis assistant for VaultMCP, an app that saves useful content from social media.
-
-Your job: Read the provided text and extract structured information. Return ONLY a valid JSON object, nothing else. No markdown, no explanation, no extra text — just the JSON.
-
-The JSON must have exactly these fields:
-{
-  "title": "A short, descriptive title for this content (max 60 chars)",
-  "category": "EXACTLY one of: AI Tools | Prompts | APIs & Libraries | Frameworks | UI Design | Tips & Tricks | Other",
-  "summary": "A 1-3 sentence summary of the key information (max 200 chars)",
-  "tools_mentioned": ["list", "of", "specific", "tool", "or", "product", "names"],
-  "links_mentioned": ["https://any-urls-mentioned-in-the-text.com"]
-}
-
-Rules:
-- "title" should be the main tool/concept name, not generic descriptions
-- "category" MUST be exactly one of the listed options
-- "tools_mentioned" should only include specific named products/tools/services
-- "links_mentioned" should only include full URLs found in the text (empty array if none)
-- If the content is a raw prompt template, set category to "Prompts" and title to a short name for the prompt
-- Return ONLY the JSON object. No markdown code fences. No commentary."""
-
-
 def _build_prompt(text: str) -> str:
     """Build the full prompt for the Mistral model."""
     trimmed = text[:MAX_INPUT_CHARS]
     if len(text) > MAX_INPUT_CHARS:
         trimmed += "\n[...content truncated...]"
 
-    return f"<s>[INST] {SYSTEM_PROMPT}\n\nHere is the content to analyze:\n\n---\n{trimmed}\n---\n\nReturn the JSON now. [/INST]"
+    prompt = (
+        "Extract the following from this text and return JSON only, no extra text:\n"
+        "{\n"
+        "  \"title\": \"\",\n"
+        "  \"category\": \"AI Tools / Prompts / APIs & Libraries / Frameworks / UI Design / Tips & Tricks / Other\",\n"
+        "  \"summary\": \"\",\n"
+        "  \"official_link\": \"best known official URL for this tool or topic, leave empty if unknown\",\n"
+        "  \"tools_mentioned\": [],\n"
+        "  \"links_mentioned\": []\n"
+        "}\n"
+        f"Text: {trimmed}"
+    )
+    return f"<s>[INST] {prompt} [/INST]"
 
 
 # ─── Core Processing ────────────────────────────────────────────────────────
@@ -300,6 +291,11 @@ def _validate_and_build(
     title = str(parsed.get("title", "")).strip()
     category = str(parsed.get("category", "")).strip()
     summary = str(parsed.get("summary", "")).strip()
+    official_link = str(parsed.get("official_link", "")).strip()
+
+    # Clear instructions/descriptions returned as values
+    if "best known official URL" in official_link:
+        official_link = ""
 
     # Validate category — must be one of the allowed values
     if category not in VALID_CATEGORIES:
@@ -338,6 +334,7 @@ def _validate_and_build(
         title=title[:60],
         category=category,
         summary=summary[:200],
+        official_link=official_link,
         tools_mentioned=tools,
         links_mentioned=links,
         raw_text=original_text,
@@ -356,11 +353,13 @@ def _build_fallback(text: str, reason: str) -> ProcessedContent:
     # Try to detect links in the raw text
     url_pattern = r"https?://[^\s<>\"')\]]+"
     found_links = re.findall(url_pattern, text)
+    official_link = found_links[0] if found_links else ""
 
     return ProcessedContent(
         title=title,
         category="Other",
         summary=text[:200].strip(),
+        official_link=official_link,
         tools_mentioned=[],
         links_mentioned=found_links[:10],
         raw_text=text,
@@ -385,6 +384,7 @@ def result_to_dict(result: ProcessedContent) -> dict:
         "title": result.title,
         "category": result.category,
         "summary": result.summary,
+        "official_link": result.official_link,
         "tools_mentioned": result.tools_mentioned,
         "links_mentioned": result.links_mentioned,
     }
