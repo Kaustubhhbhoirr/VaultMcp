@@ -25,7 +25,7 @@ import httpx
 # ─── Configuration ───────────────────────────────────────────────────────────
 
 MISTRAL_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
-HF_INFERENCE_URL = f"https://router.huggingface.co/hf-inference/models/{MISTRAL_MODEL}"
+HF_INFERENCE_URL = f"https://api-inference.huggingface.co/models/{MISTRAL_MODEL}"
 
 # Valid categories — the LLM must pick one of these
 VALID_CATEGORIES = [
