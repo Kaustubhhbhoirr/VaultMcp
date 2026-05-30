@@ -5,7 +5,7 @@
  * Base URL loaded from VITE_API_URL env var.
  */
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_URL || 'https://kaustubh5934-vaultmcp-backend.hf.space';
 
 /**
  * POST /process — Send content through the full pipeline.
