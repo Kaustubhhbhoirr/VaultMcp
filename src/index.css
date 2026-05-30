@@ -19,10 +19,6 @@
 body {
   background-color: #bfb5a3;
   margin: 0;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
 }
 
 /* 2px hard border */
@@ -98,11 +94,15 @@ body {
 
 /* Mobile-specific canvas wrapping if needed */
 .mobile-canvas {
-  width: 375px;
-  min-height: 812px;
+  width: 100%;
+  max-width: 420px;
+  height: 100vh;
+  height: 100dvh;
   margin: 0 auto;
   position: relative;
-  overflow-x: hidden;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Flickering scanline effect for retro vibe */

@@ -308,7 +308,7 @@ export default function App() {
   // If user has not completed onboarding, lock them in onboarding screen
   if (!user.name) {
     return (
-      <div className="mobile-canvas flex flex-col justify-between min-h-screen bg-background-base relative">
+      <div className="mobile-canvas bg-background-base relative">
         <div className="scanline" />
         <OnboardingScreen onComplete={handleOnboardingComplete} onConnectDrive={handleConnectDrive} isDriveConnected={user.isDriveConnected} />
         <StatusBar 
@@ -321,7 +321,7 @@ export default function App() {
   }
 
   return (
-    <div className="mobile-canvas flex flex-col justify-between min-h-screen bg-background-base relative border-x-2 border-black">
+    <div className="mobile-canvas bg-background-base relative border-x-2 border-black">
       <div className="scanline" />
       
       {/* Global Header */}
