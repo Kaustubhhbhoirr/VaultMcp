@@ -67,17 +67,22 @@ export default function ChatScreen({ messages, onSendMessage, onSaveToVault, sha
                     {msg.isExtracting && (
                       <>
                         <p className="flex items-center gap-2">
-                          <span className="text-primary-container animate-pulse">●</span> Extracting audio...
+                          <span className="text-primary-container animate-pulse">●</span> Analyzing content...
                         </p>
                         {msg.step >= 2 && (
                           <p className="flex items-center gap-2">
-                            <span className="text-primary-container animate-pulse">●</span> Transcribing via Whisper-V3...
+                            <span className="text-primary-container animate-pulse">●</span> Structuring entry...
                           </p>
                         )}
                         {msg.step >= 3 && (
-                          <p className="flex items-center gap-2 pt-2 border-t border-secondary-container border-opacity-30">
-                            <span className="text-status-success">✓</span> SAVED — {msg.category} → {msg.title}
-                          </p>
+                          <>
+                            <p className="flex items-center gap-2">
+                              <span className="text-primary-container animate-pulse">●</span> Saving to Drive...
+                            </p>
+                            <p className="flex items-center gap-2 pt-2 border-t border-secondary-container border-opacity-30">
+                              <span className="text-status-success">✓</span> SAVED — {msg.category} → {msg.title}
+                            </p>
+                          </>
                         )}
                         {msg.step >= 3 && msg.summary && (
                           <div className="mt-3 bg-inverse-surface text-on-primary-fixed border border-secondary-container border-opacity-50 p-2">

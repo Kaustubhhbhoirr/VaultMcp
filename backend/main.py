@@ -23,18 +23,6 @@ from pydantic import BaseModel
 import httpx
 
 # ─── Local Modules ───────────────────────────────────────────────────────────
-from audio_extractor import (
-    extract_audio,
-    cleanup_audio,
-    detect_platform,
-    ExtractionError,
-    UnsupportedPlatformError,
-)
-from transcriber import (
-    transcribe_audio,
-    TranscriptionError,
-    InvalidTokenError as HFInvalidTokenError,
-)
 from ai_processor import (
     process_text,
     result_to_dict,
@@ -222,6 +210,91 @@ async def root_index():
     }
 
 
+def get_youtube_metadata(url: str) -> str:
+    """Extract YouTube video metadata (title, description, tags) using yt-dlp."""
+    import yt_dlp
+    ydl_opts = {
+        "skip_download": True,
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": False,
+    }
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            if info:
+                title = info.get("title", "")
+                description = info.get("description", "")
+                tags = info.get("tags", [])
+                tags_str = ", ".join(tags) if tags else ""
+                
+                parts = [
+                    f"YouTube Video Title: {title}",
+                    f"Description: {description}"
+                ]
+                if tags_str:
+                    parts.append(f"Tags: {tags_str}")
+                return "\n".join(parts)
+    except Exception as e:
+        print(f"[YouTube Metadata] yt-dlp extract_info failed: {e}", flush=True)
+    return f"YouTube URL: {url}"
+
+
+async def get_instagram_metadata(url: str) -> str:
+    """Extract Instagram post metadata (og:title, og:description) using httpx."""
+    try:
+        async with httpx.AsyncClient(
+            timeout=15.0,
+            follow_redirects=True,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+            },
+        ) as client:
+            response = await client.get(url)
+            if response.status_code == 200:
+                html = response.text
+                
+                # Regex for og:title
+                title_match = re.search(
+                    r'<meta\s+[^>]*property=["\']og:title["\'][^>]*content=["\'](.*?)["\']',
+                    html, re.IGNORECASE
+                )
+                if not title_match:
+                    title_match = re.search(
+                        r'<meta\s+[^>]*content=["\'](.*?)["\'][^>]*property=["\']og:title["\']',
+                        html, re.IGNORECASE
+                    )
+                og_title = title_match.group(1).strip() if title_match else ""
+                
+                # Regex for og:description
+                desc_match = re.search(
+                    r'<meta\s+[^>]*property=["\']og:description["\'][^>]*content=["\'](.*?)["\']',
+                    html, re.IGNORECASE
+                )
+                if not desc_match:
+                    desc_match = re.search(
+                        r'<meta\s+[^>]*content=["\'](.*?)["\'][^>]*property=["\']og:description["\']',
+                        html, re.IGNORECASE
+                    )
+                og_desc = desc_match.group(1).strip() if desc_match else ""
+                
+                parts = []
+                if og_title:
+                    parts.append(f"Instagram Post Title: {og_title}")
+                if og_desc:
+                    parts.append(f"Caption/Description: {og_desc}")
+                
+                if parts:
+                    return "\n".join(parts)
+    except Exception as e:
+        print(f"[Instagram Metadata] httpx scrape failed: {e}", flush=True)
+    return f"Instagram URL: {url}"
+
+
 @app.get("/health")
 async def health_check():
     """System health check."""
@@ -231,8 +304,7 @@ async def health_check():
         "version": "1.0.0",
         "timestamp": datetime.utcnow().isoformat(),
         "modules": {
-            "audio_extractor": "ready",
-            "transcriber": "ready",
+            "metadata_scraper": "ready",
             "ai_processor": "ready",
             "web_searcher": "ready",
             "md_generator": "ready",
@@ -247,7 +319,7 @@ async def process_content(request: ProcessRequest):
     Main processing endpoint — the entire VaultMCP pipeline.
 
     Flow by input type:
-      Instagram/YouTube URL → extract audio → transcribe → AI structure → web search → MD
+      Instagram/YouTube URL → scrape metadata → AI structure → web search → MD
       Website URL           → scrape title/desc → AI structure → web search → MD
       Plain text            → AI structure → web search → MD
     """
@@ -271,138 +343,120 @@ async def process_content(request: ProcessRequest):
 
     source_url = content if input_type != "text" else ""
     text_for_ai = ""
-    audio_path = None
 
-    try:
-        # ── Step 2: Extract audio (Instagram / YouTube only) ─────────
-        if input_type in ("instagram", "youtube"):
-            try:
-                extraction = extract_audio(content)
-                audio_path = extraction.audio_path
-                pipeline_steps.append({
-                    "step": 2, "name": "extract_audio", "status": "done",
-                    "detail": f"Platform: {extraction.platform}, title: {extraction.title}",
-                })
-            except (ExtractionError, UnsupportedPlatformError) as e:
-                pipeline_steps.append({
-                    "step": 2, "name": "extract_audio", "status": "error",
-                    "detail": str(e),
-                })
-                raise HTTPException(status_code=422, detail=str(e))
+    # ── Step 2: Retrieve metadata/content based on input type ────────────
+    if input_type == "youtube":
+        try:
+            metadata = get_youtube_metadata(content)
+            text_for_ai = metadata
+            pipeline_steps.append({
+                "step": 2, "name": "youtube_metadata", "status": "done",
+                "detail": f"Retrieved YouTube metadata",
+            })
+        except Exception as e:
+            pipeline_steps.append({
+                "step": 2, "name": "youtube_metadata", "status": "error",
+                "detail": str(e),
+            })
+            raise HTTPException(status_code=422, detail=f"YouTube metadata query failed: {e}")
 
-            # ── Step 3: Transcribe audio ─────────────────────────────
-            try:
-                transcription = transcribe_audio(audio_path, hf_token)
-                
-                # Use English translation for AI processor if available, otherwise original text
-                if transcription.translation:
-                    text_for_ai = transcription.translation
-                    if extraction.title:
-                        text_for_ai = f"Video title: {extraction.title}\n\nTranscript (Translated to English):\n{text_for_ai}"
-                else:
-                    text_for_ai = transcription.text
-                    if extraction.title:
-                        text_for_ai = f"Video title: {extraction.title}\n\nTranscript:\n{text_for_ai}"
+    elif input_type == "instagram":
+        try:
+            metadata = await get_instagram_metadata(content)
+            text_for_ai = metadata
+            pipeline_steps.append({
+                "step": 2, "name": "instagram_metadata", "status": "done",
+                "detail": f"Retrieved Instagram metadata",
+            })
+        except Exception as e:
+            pipeline_steps.append({
+                "step": 2, "name": "instagram_metadata", "status": "error",
+                "detail": str(e),
+            })
+            raise HTTPException(status_code=422, detail=f"Instagram metadata query failed: {e}")
 
-                pipeline_steps.append({
-                    "step": 3, "name": "transcribe", "status": "done",
-                    "detail": f"Transcribed {transcription.audio_size_kb} KB, {len(transcription.text)} chars" + (f" (translated from Hindi)" if transcription.translation else ""),
-                })
-            except HFInvalidTokenError as e:
-                pipeline_steps.append({
-                    "step": 3, "name": "transcribe", "status": "error",
-                    "detail": str(e),
-                })
-                raise HTTPException(status_code=401, detail=f"HF token error: {e}")
-            except TranscriptionError as e:
-                pipeline_steps.append({
-                    "step": 3, "name": "transcribe", "status": "error",
-                    "detail": str(e),
-                })
-                raise HTTPException(status_code=422, detail=f"Transcription failed: {e}")
-
-        # ── Step 2-3 alt: Scrape website ─────────────────────────────
-        elif input_type == "website":
-            pipeline_steps.append({"step": 2, "name": "extract_audio", "status": "skipped"})
-
+    elif input_type == "website":
+        try:
             scraped_text = await scrape_website(content)
             text_for_ai = scraped_text
             pipeline_steps.append({
-                "step": 3, "name": "scrape_website", "status": "done",
+                "step": 2, "name": "scrape_website", "status": "done",
                 "detail": f"Scraped {len(scraped_text)} chars",
             })
-
-        # ── Step 2-3 alt: Plain text (skip extraction) ───────────────
-        else:
-            pipeline_steps.append({"step": 2, "name": "extract_audio", "status": "skipped"})
-            pipeline_steps.append({"step": 3, "name": "transcribe", "status": "skipped"})
-            text_for_ai = content
-
-        # ── Step 4: AI structuring ───────────────────────────────────
-        try:
-            processed = process_text(text_for_ai, hf_token)
-            processed_dict = result_to_dict(processed)
+        except Exception as e:
             pipeline_steps.append({
-                "step": 4, "name": "ai_structure", "status": "done",
-                "detail": f"Category: {processed.category}, fallback: {processed.was_fallback}",
-            })
-        except AIInvalidTokenError as e:
-            pipeline_steps.append({
-                "step": 4, "name": "ai_structure", "status": "error",
+                "step": 2, "name": "scrape_website", "status": "error",
                 "detail": str(e),
             })
-            raise HTTPException(status_code=401, detail=f"HF token error: {e}")
-        except ProcessingError as e:
-            pipeline_steps.append({
-                "step": 4, "name": "ai_structure", "status": "error",
-                "detail": str(e),
-            })
-            raise HTTPException(status_code=422, detail=f"AI processing failed: {e}")
+            raise HTTPException(status_code=422, detail=f"Website scraping failed: {e}")
 
-        # ── Step 5: Web search for official link ─────────────────────
-        official_info = get_official_info(processed.official_link)
-        official_link = official_info.get("official_link", "")
+    else:
+        # Plain text
+        text_for_ai = content
         pipeline_steps.append({
-            "step": 5, "name": "web_search", "status": "done" if official_link else "no_results",
-            "detail": f"Provider: {official_info.get('provider', 'none')}, link: {official_link or 'N/A'}",
+            "step": 2, "name": "prepare_content", "status": "done",
+            "detail": f"Prepared {len(content)} chars of plain text",
         })
 
-        # ── Step 6: Generate Markdown ────────────────────────────────
-        entry = build_entry(
-            processed=processed_dict,
-            source_url=source_url,
-            official_link=official_link,
-        )
-        md_entry = generate_entry_md(entry)
-        saved_on = format_retro_date(datetime.utcnow())
-
+    # ── Step 3: AI structuring (Mistral) ───────────────────────────────
+    try:
+        processed = process_text(text_for_ai, hf_token)
+        processed_dict = result_to_dict(processed)
         pipeline_steps.append({
-            "step": 6, "name": "generate_md", "status": "done",
+            "step": 3, "name": "ai_structure", "status": "done",
+            "detail": f"Category: {processed.category}, fallback: {processed.was_fallback}",
         })
+    except AIInvalidTokenError as e:
+        pipeline_steps.append({
+            "step": 3, "name": "ai_structure", "status": "error",
+            "detail": str(e),
+        })
+        raise HTTPException(status_code=401, detail=f"HF token error: {e}")
+    except ProcessingError as e:
+        pipeline_steps.append({
+            "step": 3, "name": "ai_structure", "status": "error",
+            "detail": str(e),
+        })
+        raise HTTPException(status_code=422, detail=f"AI processing failed: {e}")
 
-        # ── Return final result ──────────────────────────────────────
-        return {
-            "status": "success",
-            "result": {
-                "title": processed.title,
-                "category": processed.category,
-                "summary": processed.summary,
-                "official_link": official_link,
-                "source_url": source_url,
-                "tools_mentioned": processed.tools_mentioned,
-                "links_mentioned": processed.links_mentioned,
-                "md_entry": md_entry,
-                "saved_on": saved_on,
-                "translation": transcription.translation if "transcription" in locals() and hasattr(transcription, "translation") else None,
-            },
-            "pipeline_steps": pipeline_steps,
-            "input_type": input_type,
-        }
+    # ── Step 4: Web search for official link ─────────────────────
+    official_info = get_official_info(processed.official_link)
+    official_link = official_info.get("official_link", "")
+    pipeline_steps.append({
+        "step": 4, "name": "web_search", "status": "done" if official_link else "no_results",
+        "detail": f"Provider: {official_info.get('provider', 'none')}, link: {official_link or 'N/A'}",
+    })
 
-    finally:
-        # ── Cleanup: delete temp audio file ──────────────────────────
-        if audio_path:
-            cleanup_audio(audio_path)
+    # ── Step 5: Generate Markdown ────────────────────────────────
+    entry = build_entry(
+        processed=processed_dict,
+        source_url=source_url,
+        official_link=official_link,
+    )
+    md_entry = generate_entry_md(entry)
+    saved_on = format_retro_date(datetime.utcnow())
+
+    pipeline_steps.append({
+        "step": 5, "name": "generate_md", "status": "done",
+    })
+
+    # ── Return final result ──────────────────────────────────────
+    return {
+        "status": "success",
+        "result": {
+            "title": processed.title,
+            "category": processed.category,
+            "summary": processed.summary,
+            "official_link": official_link,
+            "source_url": source_url,
+            "tools_mentioned": processed.tools_mentioned,
+            "links_mentioned": processed.links_mentioned,
+            "md_entry": md_entry,
+            "saved_on": saved_on,
+        },
+        "pipeline_steps": pipeline_steps,
+        "input_type": input_type,
+    }
 
 
 @app.post("/process/file")
