@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ScrollReveal from '../components/ScrollReveal';
 
 export default function VaultScreen({ vaultItems }) {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
@@ -138,67 +139,68 @@ export default function VaultScreen({ vaultItems }) {
           filteredItems.map((item) => {
             const isExpanded = expandedIds.has(item.id);
             return (
-              <article 
-                key={item.id} 
-                className={`retro-border p-4 retro-outset space-y-3 bg-surface-panel transition-opacity ${item.locked ? 'opacity-80 grayscale' : ''}`}
-              >
-                {/* Header info */}
-                <div className="flex justify-between items-start select-none">
-                  <span className="px-2 py-0.5 bg-primary-container text-white retro-border font-label-caps text-[10px] uppercase">
-                    {item.category}
-                  </span>
-                  <span className="font-label-caps text-[10px] text-on-surface-variant">
-                    {item.date}
-                  </span>
-                </div>
-
-                {/* Core title and toggle */}
-                <div 
-                  onClick={() => !item.locked && toggleExpand(item.id)}
-                  className={`flex justify-between items-center cursor-pointer ${item.locked ? 'cursor-not-allowed' : ''}`}
+              <ScrollReveal key={item.id}>
+                <article 
+                  className={`retro-border p-4 retro-outset space-y-3 bg-surface-panel transition-opacity ${item.locked ? 'opacity-80 grayscale' : ''}`}
                 >
-                  <h2 className="font-headline-md text-headline-md leading-tight text-text-main">
-                    {item.title}
-                  </h2>
-                  {!item.locked && (
-                    <span className="material-symbols-outlined transition-transform select-none">
-                      {isExpanded ? 'expand_less' : 'expand_more'}
+                  {/* Header info */}
+                  <div className="flex justify-between items-start select-none">
+                    <span className="px-2 py-0.5 bg-primary-container text-white retro-border font-label-caps text-[10px] uppercase">
+                      {item.category}
                     </span>
-                  )}
-                  {item.locked && (
-                    <span className="material-symbols-outlined text-on-surface-variant select-none">
-                      lock
+                    <span className="font-label-caps text-[10px] text-on-surface-variant">
+                      {item.date}
                     </span>
-                  )}
-                </div>
+                  </div>
 
-                {/* Expanded guide / source */}
-                {isExpanded && !item.locked && (
-                  <div className="space-y-3 pt-2">
-                    <p className="font-body-md text-body-md text-on-surface-variant">
+                  {/* Core title and toggle */}
+                  <div 
+                    onClick={() => !item.locked && toggleExpand(item.id)}
+                    className={`flex justify-between items-center cursor-pointer ${item.locked ? 'cursor-not-allowed' : ''}`}
+                  >
+                    <h2 className="font-headline-md text-headline-md leading-tight text-text-main">
+                      {item.title}
+                    </h2>
+                    {!item.locked && (
+                      <span className="material-symbols-outlined transition-transform select-none">
+                        {isExpanded ? 'expand_less' : 'expand_more'}
+                      </span>
+                    )}
+                    {item.locked && (
+                      <span className="material-symbols-outlined text-on-surface-variant select-none">
+                        lock
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Expanded guide / source */}
+                  {isExpanded && !item.locked && (
+                    <div className="space-y-3 pt-2">
+                      <p className="font-body-md text-body-md text-on-surface-variant">
+                        {item.summary || item.text}
+                      </p>
+                      {item.sourceUrl && (
+                        <div className="bg-white retro-border p-2 font-mono-code text-[11px] break-all retro-inset-medium">
+                          SRC: <a className="underline text-tertiary" href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceUrl}</a>
+                        </div>
+                      )}
+                      <button 
+                        onClick={() => alert(`Content of:\n${item.title}\n\n${item.summary}`)}
+                        className="w-full py-3 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press cursor-pointer"
+                      >
+                        [ VIEW MD ]
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Collapsed short excerpt preview */}
+                  {!isExpanded && !item.locked && (
+                    <p className="font-body-md text-body-md text-on-surface-variant line-clamp-1 opacity-70">
                       {item.summary || item.text}
                     </p>
-                    {item.sourceUrl && (
-                      <div className="bg-white retro-border p-2 font-mono-code text-[11px] break-all retro-inset-medium">
-                        SRC: <a className="underline text-tertiary" href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceUrl}</a>
-                      </div>
-                    )}
-                    <button 
-                      onClick={() => alert(`Content of:\n${item.title}\n\n${item.summary}`)}
-                      className="w-full py-3 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press cursor-pointer"
-                    >
-                      [ VIEW MD ]
-                    </button>
-                  </div>
-                )}
-
-                {/* Collapsed short excerpt preview */}
-                {!isExpanded && !item.locked && (
-                  <p className="font-body-md text-body-md text-on-surface-variant line-clamp-1 opacity-70">
-                    {item.summary || item.text}
-                  </p>
-                )}
-              </article>
+                  )}
+                </article>
+              </ScrollReveal>
             );
           })
         )}

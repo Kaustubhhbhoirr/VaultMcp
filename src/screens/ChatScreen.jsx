@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import ScrollReveal from '../components/ScrollReveal';
 
 export default function ChatScreen({ messages, onSendMessage, onSaveToVault, sharedInput, clearSharedInput }) {
   const [inputVal, setInputVal] = useState('');
@@ -42,19 +43,19 @@ export default function ChatScreen({ messages, onSendMessage, onSaveToVault, sha
             
             if (isUser) {
               return (
-                <div key={index} className="flex justify-end">
+                <ScrollReveal key={index} className="flex justify-end">
                   <div className="bg-surface-container-lowest retro-border retro-outset p-3 max-w-[85%] md:max-w-md">
                     <p className={`font-mono-code text-mono-code ${msg.isUrl ? 'break-all underline cursor-pointer text-primary hover:text-secondary-container transition-colors' : ''}`}>
                       {msg.text}
                     </p>
                   </div>
-                </div>
+                </ScrollReveal>
               );
             }
 
             // System Message
             return (
-              <div key={index} className="flex flex-col items-start gap-1">
+              <ScrollReveal key={index} className="flex flex-col items-start gap-1">
                 {msg.label && (
                   <div className="bg-secondary-container text-on-secondary-container px-2 py-0.5 retro-border border-b-0 font-label-caps text-[10px] ml-1">
                     {msg.label}
@@ -112,7 +113,7 @@ export default function ChatScreen({ messages, onSendMessage, onSaveToVault, sha
                     )}
                   </div>
                 </div>
-              </div>
+              </ScrollReveal>
             );
           })}
           <div ref={chatEndRef} />
