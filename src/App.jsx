@@ -1,51 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import OnboardingScreen from './screens/OnboardingScreen';
 import ChatScreen from './screens/ChatScreen';
 import VaultScreen from './screens/VaultScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import StatusBar from './components/StatusBar';
-import { isValidUrl, getCleanHostLabel, formatRetroDate } from './utils/helpers';
-
-// Initial vault items matching the designs
-const INITIAL_VAULT_ITEMS = [
-  {
-    id: 1,
-    title: "Cursor AI - Agentic Workflows",
-    category: "AI TOOLS",
-    date: "12.OCT.2023",
-    summary: "Detailed guide on using Cursor's new agentic features for rapid frontend prototyping and iterative design.",
-    sourceUrl: "https://cursor.com",
-    locked: false
-  },
-  {
-    id: 2,
-    title: "Neo-Brutalism Guidelines",
-    category: "UI DESIGN",
-    date: "10.OCT.2023",
-    summary: "Core principles of high-contrast UI layouts, typography systems, and skeuomorphic vintage borders.",
-    sourceUrl: "https://brutalistwebsites.com",
-    locked: false
-  },
-  {
-    id: 3,
-    title: "System Role Architect",
-    category: "PROMPTS",
-    date: "08.OCT.2023",
-    summary: "Building complex system role instructions and agentic personas for large language models.",
-    sourceUrl: "",
-    locked: false
-  },
-  {
-    id: 4,
-    title: "Legacy Archive v2.1",
-    category: "OTHER",
-    date: "05.OCT.2023",
-    summary: "Encrypted old index contents.",
-    sourceUrl: "",
-    locked: true
-  }
-];
+import { isValidUrl, formatRetroDate } from './utils/helpers';
+import { processContent, saveToDrive, getVaultFromDrive, getGoogleAuthUrl, exchangeGoogleAuthCode } from './utils/api';
 
 // Initial chat history matching the designs
 const INITIAL_MESSAGES = [
@@ -83,16 +44,107 @@ export default function App() {
   const [user, setUser] = useLocalStorage('vaultmcp_user', {
     name: '',
     hfToken: '',
-    isDriveConnected: false
+    isDriveConnected: false,
+    driveAccessToken: '',
+    driveRefreshToken: '',
   });
 
-  const [vaultItems, setVaultItems] = useLocalStorage('vaultmcp_vault_items', INITIAL_VAULT_ITEMS);
+  const [vaultItems, setVaultItems] = useLocalStorage('vaultmcp_vault_items', []);
   const [messages, setMessages] = useLocalStorage('vaultmcp_messages', INITIAL_MESSAGES);
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'vault' | 'settings'
   const [sharedInput, setSharedInput] = useState('');
+  const hasProcessedShare = useRef(false);
+
+  // ─── Real API call: process content ───────────────────────────────────
+  const handleSendMessage = useCallback(async (text) => {
+    const isLink = isValidUrl(text.trim());
+    const hfToken = user.hfToken;
+
+    // Add user message
+    const userMsg = { sender: 'user', text, isUrl: isLink };
+    setMessages(prev => [...prev, userMsg]);
+
+    if (!hfToken) {
+      setMessages(prev => [...prev, {
+        sender: 'system',
+        isError: true,
+        text: '● ERROR — No Hugging Face token set. Go to Settings to add your token.',
+      }]);
+      return;
+    }
+
+    // Add a "processing" system message
+    const msgId = Date.now();
+    const processingMsg = {
+      id: msgId,
+      sender: 'system',
+      label: isLink ? 'URL_EXTRACTOR' : 'TEXT_PROCESSOR',
+      isExtracting: true,
+      step: 1,
+      category: '',
+      title: 'Processing...',
+      summary: '',
+    };
+    setMessages(prev => [...prev, processingMsg]);
+
+    try {
+      // Step 2: call the real backend
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, step: 2 } : m));
+
+      const response = await processContent(text.trim(), hfToken);
+      const result = response.result;
+
+      // Step 3: show success with real data
+      setMessages(prev => prev.map(m => m.id === msgId ? {
+        ...m,
+        step: 3,
+        title: result.title,
+        category: result.category,
+        summary: result.summary,
+      } : m));
+
+      // Add to local vault items
+      const newVaultItem = {
+        id: Date.now(),
+        title: result.title,
+        category: result.category.toUpperCase(),
+        date: result.saved_on,
+        summary: result.summary,
+        sourceUrl: result.source_url || result.official_link || '',
+        officialLink: result.official_link || '',
+        mdEntry: result.md_entry,
+        locked: false,
+      };
+      setVaultItems(prev => [newVaultItem, ...prev]);
+
+      // Auto-save to Google Drive if connected
+      if (user.isDriveConnected && user.driveAccessToken && result.md_entry) {
+        try {
+          await saveToDrive(result.md_entry, user.driveAccessToken, user.driveRefreshToken);
+        } catch (driveErr) {
+          console.error('[VaultMCP] Drive save failed:', driveErr.message);
+          // Non-blocking: entry is saved locally even if Drive fails
+        }
+      }
+
+    } catch (err) {
+      // Replace the processing message with an error
+      setMessages(prev => prev.map(m => m.id === msgId ? {
+        ...m,
+        id: undefined, // clear the id so it's treated as a normal message
+        isExtracting: false,
+        isError: true,
+        label: undefined,
+        text: `● ERROR — Could not process. Try again. (${err.message})`,
+      } : m));
+    }
+  }, [user.hfToken, user.isDriveConnected, user.driveAccessToken, user.driveRefreshToken, setMessages, setVaultItems]);
 
   // Parse share target options on load
   useEffect(() => {
+    if (hasProcessedShare.current) return;
+
+    const isSharePath = window.location.pathname === '/share';
     const params = new URLSearchParams(window.location.search);
     const title = params.get('title');
     const text = params.get('text');
@@ -103,15 +155,94 @@ export default function App() {
     else if (text) shared = text;
     else if (title) shared = title;
 
-    if (shared) {
-      setSharedInput(shared);
-      // Clean up parameters from the address bar
-      window.history.replaceState({}, document.title, window.location.pathname);
+    if (shared && (isSharePath || params.has('title') || params.has('text') || params.has('url'))) {
+      hasProcessedShare.current = true;
+      
+      // Clear URL query parameters and pathname
+      window.history.replaceState({}, document.title, '/');
+      
+      // Lands on Chat screen automatically
+      setActiveTab('chat');
+      
+      if (user.name && user.hfToken) {
+        handleSendMessage(shared);
+      } else {
+        setSharedInput(shared);
+      }
     }
-  }, []);
+  }, [user.name, user.hfToken, handleSendMessage]);
+
+  // ─── Fetch vault from Drive when switching to vault tab ───────────────
+  const fetchVaultFromDrive = useCallback(async () => {
+    if (!user.driveAccessToken) return;
+
+    try {
+      const response = await getVaultFromDrive(user.driveAccessToken, user.driveRefreshToken);
+
+      if (response.status === 'success' && response.content) {
+        // Parse vault.md content into structured items
+        const items = parseVaultMd(response.content);
+        setVaultItems(items);
+      }
+    } catch (err) {
+      console.error('[VaultMCP] Failed to fetch vault from Drive:', err.message);
+    }
+  }, [user.driveAccessToken, user.driveRefreshToken, setVaultItems]);
+
+  useEffect(() => {
+    if (activeTab === 'vault') {
+      fetchVaultFromDrive();
+    }
+  }, [activeTab, fetchVaultFromDrive]);
+
+  // ─── Google Drive OAuth ───────────────────────────────────────────────
+  const handleConnectDrive = async () => {
+    try {
+      const authUrl = await getGoogleAuthUrl();
+      // Open Google OAuth consent in a popup
+      const popup = window.open(authUrl, 'google-oauth', 'width=500,height=600');
+
+      // Listen for the redirect with auth code
+      const checkPopup = setInterval(async () => {
+        try {
+          if (popup.closed) {
+            clearInterval(checkPopup);
+            return;
+          }
+          const popupUrl = popup.location.href;
+          if (popupUrl.includes('code=')) {
+            clearInterval(checkPopup);
+            const popupParams = new URLSearchParams(new URL(popupUrl).search);
+            const authCode = popupParams.get('code');
+            popup.close();
+
+            if (authCode) {
+              const tokens = await exchangeGoogleAuthCode(authCode);
+              setUser(prev => ({
+                ...prev,
+                isDriveConnected: true,
+                driveAccessToken: tokens.access_token,
+                driveRefreshToken: tokens.refresh_token || '',
+              }));
+            }
+          }
+        } catch (_) {
+          // Cross-origin — popup hasn't redirected yet, keep polling
+        }
+      }, 500);
+    } catch (err) {
+      console.error('[VaultMCP] Drive auth error:', err.message);
+      // Add error message to chat
+      setMessages(prev => [...prev, {
+        sender: 'system',
+        isError: true,
+        text: `● ERROR — Could not connect Google Drive: ${err.message}`,
+      }]);
+    }
+  };
 
   const handleOnboardingComplete = (userData) => {
-    setUser(userData);
+    setUser(prev => ({ ...prev, ...userData }));
   };
 
   const handleUpdateUser = (updatedData) => {
@@ -122,109 +253,22 @@ export default function App() {
     setUser({
       name: '',
       hfToken: '',
-      isDriveConnected: false
+      isDriveConnected: false,
+      driveAccessToken: '',
+      driveRefreshToken: '',
     });
-    setVaultItems(INITIAL_VAULT_ITEMS);
+    setVaultItems([]);
     setMessages(INITIAL_MESSAGES);
     setActiveTab('chat');
   };
 
-  const handleSendMessage = (text) => {
-    const isLink = isValidUrl(text.trim());
-
-    // Add user message
-    const userMsg = { sender: 'user', text, isUrl: isLink };
-    const nextMessages = [...messages, userMsg];
-    setMessages(nextMessages);
-
-    if (isLink) {
-      // Simulate extraction pipeline
-      const msgId = Date.now();
-      const newSysMsg = {
-        id: msgId,
-        sender: 'system',
-        label: 'URL_EXTRACTOR',
-        isExtracting: true,
-        step: 1,
-        category: 'AI TOOLS',
-        title: 'Extracting...',
-        summary: ''
-      };
-
-      setMessages(prev => [...prev, newSysMsg]);
-
-      // Phase 2
-      setTimeout(() => {
-        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, step: 2 } : m));
-      }, 1500);
-
-      // Phase 3 (Complete & Add to Vault)
-      setTimeout(() => {
-        const cleanedHost = getCleanHostLabel(text.trim());
-        
-        const extractedTitle = `Shared Link from ${cleanedHost}`;
-        const summaryText = `Automatically archived shared URL content from web location: ${text.trim()}. Indexed for query analysis.`;
-        
-        setMessages(prev => prev.map(m => m.id === msgId ? { 
-          ...m, 
-          step: 3, 
-          title: extractedTitle, 
-          category: 'APIS',
-          summary: summaryText
-        } : m));
-
-        // Add to Vault Items
-        const newVaultItem = {
-          id: Date.now(),
-          title: extractedTitle,
-          category: 'APIS',
-          date: formatRetroDate(new Date()),
-          summary: summaryText,
-          sourceUrl: text.trim(),
-          locked: false
-        };
-        setVaultItems(prev => [newVaultItem, ...prev]);
-
-      }, 3000);
-
-    } else {
-      // Simulate typical AI assistant prompt reply
-      setTimeout(() => {
-        const queryText = text.toLowerCase();
-        // Check if user is searching for something in vault
-        const matches = vaultItems.filter(item => 
-          !item.locked && 
-          (item.title.toLowerCase().includes(queryText) || item.summary.toLowerCase().includes(queryText))
-        );
-
-        if (matches.length > 0) {
-          const match = matches[0];
-          setMessages(prev => [...prev, {
-            sender: 'system',
-            label: 'VAULT_QUERY',
-            isQueryMatch: true,
-            matchCount: matches.length,
-            title: match.title,
-            date: match.date,
-            fileName: `${match.title.replace(/\s+/g, '_')}.pdf`
-          }]);
-        } else {
-          setMessages(prev => [...prev, {
-            sender: 'system',
-            text: `Indexed search query for "${text}". No matches found in your local Google Drive or HF vault. Try searching for "Cursor" or "Brutalism".`,
-            isUrl: false
-          }]);
-        }
-      }, 800);
-    }
-  };
 
   // If user has not completed onboarding, lock them in onboarding screen
   if (!user.name) {
     return (
       <div className="mobile-canvas flex flex-col justify-between min-h-screen bg-background-base relative">
         <div className="scanline" />
-        <OnboardingScreen onComplete={handleOnboardingComplete} />
+        <OnboardingScreen onComplete={handleOnboardingComplete} onConnectDrive={handleConnectDrive} />
         <StatusBar leftLabel="AWAITING SYSTEM INITIALIZATION" rightLabel="OFFLINE" isOk={false} />
       </div>
     );
@@ -290,13 +334,14 @@ export default function App() {
           />
         )}
         {activeTab === 'vault' && (
-          <VaultScreen vaultItems={vaultItems} />
+          <VaultScreen vaultItems={vaultItems} onRefresh={fetchVaultFromDrive} />
         )}
         {activeTab === 'settings' && (
           <SettingsScreen 
             user={user} 
             onUpdateUser={handleUpdateUser} 
             onClearVault={handleClearVault}
+            onConnectDrive={handleConnectDrive}
           />
         )}
       </div>
@@ -347,4 +392,68 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+// ─── Helper: Parse vault.md content into structured items ───────────────────
+function parseVaultMd(mdContent) {
+  const items = [];
+  if (!mdContent) return items;
+
+  // Split by ### headers (each entry)
+  const sections = mdContent.split(/^### /m).filter(s => s.trim());
+  let currentCategory = 'OTHER';
+
+  for (const section of sections) {
+    // Check if this section starts with a category header
+    const catMatch = section.match(/^\[CATEGORY:\s*(.+?)\]/m);
+    if (catMatch) {
+      currentCategory = catMatch[1].trim().toUpperCase();
+      continue;
+    }
+
+    // Parse entry
+    const lines = section.trim().split('\n');
+    const title = lines[0]?.trim() || 'Untitled';
+
+    let summary = '';
+    let sourceUrl = '';
+    let officialLink = '';
+    let savedOn = '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('- Summary:')) {
+        summary = trimmed.replace('- Summary:', '').trim();
+      } else if (trimmed.startsWith('- Official link:')) {
+        officialLink = trimmed.replace('- Official link:', '').trim();
+        if (officialLink === 'N/A') officialLink = '';
+      } else if (trimmed.startsWith('- Source:')) {
+        sourceUrl = trimmed.replace('- Source:', '').trim();
+      } else if (trimmed.startsWith('- Saved on:')) {
+        savedOn = trimmed.replace('- Saved on:', '').trim();
+      }
+    }
+
+    // Find category from the content above this entry
+    const aboveContent = mdContent.split(`### ${title}`)[0] || '';
+    const catHeaders = aboveContent.match(/## \[CATEGORY:\s*(.+?)\]/g);
+    if (catHeaders && catHeaders.length > 0) {
+      const lastCat = catHeaders[catHeaders.length - 1];
+      const m = lastCat.match(/\[CATEGORY:\s*(.+?)\]/);
+      if (m) currentCategory = m[1].trim().toUpperCase();
+    }
+
+    items.push({
+      id: Date.now() + Math.random(),
+      title,
+      category: currentCategory,
+      date: savedOn || formatRetroDate(new Date()),
+      summary,
+      sourceUrl: sourceUrl || officialLink,
+      officialLink,
+      locked: false,
+    });
+  }
+
+  return items;
 }

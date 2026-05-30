@@ -1,0 +1,24 @@
+# VaultMCP Backend — Python Dependencies
+#
+# Install with: pip install -r requirements.txt
+
+# ─── Core Framework ─────────────────────────────────────
+fastapi
+uvicorn[standard]
+
+# ─── Audio Extraction ───────────────────────────────────
+yt-dlp
+
+# ─── HTTP Client (HF API, Tavily, Serper, web scraping) ─
+httpx
+
+# ─── Google Drive Integration ───────────────────────────
+google-auth
+google-auth-oauthlib
+google-api-python-client
+
+# ─── Environment Variables ──────────────────────────────
+python-dotenv
+
+# ─── File Upload Support (FastAPI multipart) ────────────
+python-multipart

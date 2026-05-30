@@ -1,0 +1,9 @@
+{
+  "name": "VaultMCP",
+  "description": "Read and search the user's personal knowledge vault",
+  "version": "1.0",
+  "endpoints": {
+    "vault": "/mcp/vault",
+    "search": "/mcp/search"
+  }
+}

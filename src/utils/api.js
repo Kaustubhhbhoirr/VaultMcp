@@ -1,0 +1,131 @@
+/**
+ * api.js — VaultMCP API Client
+ *
+ * All calls to the FastAPI backend go through this module.
+ * Base URL loaded from VITE_API_URL env var.
+ */
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
+/**
+ * POST /process — Send content through the full pipeline.
+ * @param {string} content - URL or plain text
+ * @param {string} hfToken - User's Hugging Face token
+ * @returns {Promise<object>} Pipeline result
+ */
+export async function processContent(content, hfToken) {
+  const res = await fetch(`${API_BASE}/process`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-HF-Token': hfToken,
+    },
+    body: JSON.stringify({
+      content,
+      hf_token: hfToken,
+      content_type: 'auto',
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `API error: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * POST /drive/save — Save an MD entry to Google Drive.
+ * @param {string} mdEntry - Markdown string to save
+ * @param {string} accessToken - Google Drive OAuth access token
+ * @param {string|null} refreshToken - Google Drive OAuth refresh token
+ * @returns {Promise<object>}
+ */
+export async function saveToDrive(mdEntry, accessToken, refreshToken = null) {
+  const res = await fetch(`${API_BASE}/drive/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      md_entry: mdEntry,
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `Drive save error: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * GET /drive/vault — Fetch the full vault.md from Google Drive.
+ * @param {string} accessToken - Google Drive OAuth access token
+ * @param {string|null} refreshToken - Google Drive OAuth refresh token
+ * @returns {Promise<object>}
+ */
+export async function getVaultFromDrive(accessToken, refreshToken = null) {
+  const params = new URLSearchParams({ access_token: accessToken });
+  if (refreshToken) params.append('refresh_token', refreshToken);
+
+  const res = await fetch(`${API_BASE}/drive/vault?${params.toString()}`, {
+    method: 'GET',
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `Drive vault error: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * GET /auth/url — Get the Google OAuth consent URL.
+ * @returns {Promise<string>} OAuth consent URL
+ */
+export async function getGoogleAuthUrl() {
+  const res = await fetch(`${API_BASE}/auth/url`, { method: 'GET' });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `Auth URL error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.auth_url;
+}
+
+/**
+ * POST /auth/google — Exchange OAuth auth code for tokens.
+ * @param {string} authCode - Authorization code from Google redirect
+ * @returns {Promise<object>} { access_token, refresh_token, expires_in }
+ */
+export async function exchangeGoogleAuthCode(authCode) {
+  const res = await fetch(`${API_BASE}/auth/google`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ auth_code: authCode }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `Auth exchange error: ${res.status}`);
+  }
+
+  const data = await res.json();
+  return data.tokens;
+}
+
+/**
+ * GET /health — Check backend health.
+ * @returns {Promise<object>}
+ */
+export async function healthCheck() {
+  const res = await fetch(`${API_BASE}/health`, { method: 'GET' });
+  if (!res.ok) throw new Error(`Health check failed: ${res.status}`);
+  return res.json();
+}
