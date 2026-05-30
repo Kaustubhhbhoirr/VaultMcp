@@ -288,7 +288,7 @@ async def process_content(request: ProcessRequest):
                     "step": 2, "name": "extract_audio", "status": "error",
                     "detail": str(e),
                 })
-                raise HTTPException(status_code=422, detail=f"Audio extraction failed: {e}")
+                raise HTTPException(status_code=422, detail=str(e))
 
             # ── Step 3: Transcribe audio ─────────────────────────────
             try:

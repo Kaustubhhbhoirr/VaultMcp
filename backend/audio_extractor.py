@@ -216,29 +216,29 @@ def extract_audio(url: str) -> ExtractionResult:
         error_msg = str(e).lower()
         print(f"[Audio Extractor] DownloadError occurred: {error_msg}", flush=True)
 
-        if "private" in error_msg or "login" in error_msg:
+        if "private" in error_msg or "login" in error_msg or "sign in" in error_msg:
             raise ExtractionError(
-                f"Content is private or requires login: {url}"
+                "This reel is from a private account"
             ) from e
 
-        if "not found" in error_msg or "404" in error_msg:
+        if "not found" in error_msg or "404" in error_msg or "deleted" in error_msg or "removed" in error_msg:
             raise ExtractionError(
-                f"Content not found (may be deleted): {url}"
+                "This reel is no longer available"
             ) from e
 
-        if "age" in error_msg or "restricted" in error_msg:
+        if "age" in error_msg or "restricted" in error_msg or "confirm your age" in error_msg:
             raise ExtractionError(
-                f"Content is age-restricted and cannot be accessed: {url}"
+                "This reel is age-restricted and cannot be accessed"
             ) from e
 
         raise ExtractionError(
-            f"Failed to extract audio from {url}: {e}"
+            "Could not extract audio. Try a different link"
         ) from e
 
     except Exception as e:
         print(f"[Audio Extractor] Unexpected Exception occurred: {e}", flush=True)
         raise ExtractionError(
-            f"Unexpected error extracting audio from {url}: {e}"
+            "Could not extract audio. Try a different link"
         ) from e
 
     # Find the output audio file
