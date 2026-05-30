@@ -82,24 +82,28 @@ class ProcessedContent:
 # ─── Prompt Construction ─────────────────────────────────────────────────────
 
 def _build_prompt(text: str) -> str:
-    """Build the full prompt for the Mistral model."""
+    """Build the full prompt for the model."""
     trimmed = text[:MAX_INPUT_CHARS]
     if len(text) > MAX_INPUT_CHARS:
         trimmed += "\n[...content truncated...]"
 
-    prompt = (
-        "Extract the following from this text and return JSON only, no extra text:\n"
-        "{\n"
-        "  \"title\": \"\",\n"
-        "  \"category\": \"AI Tools / Prompts / APIs & Libraries / Frameworks / UI Design / Tips & Tricks / Other\",\n"
-        "  \"summary\": \"\",\n"
-        "  \"official_link\": \"best known official URL for this tool or topic, leave empty if unknown\",\n"
-        "  \"tools_mentioned\": [],\n"
-        "  \"links_mentioned\": []\n"
-        "}\n"
-        f"Text: {trimmed}"
-    )
+    prompt = f"""
+You are a knowledge vault assistant. Analyze the following content and extract structured information.
+
+Content: {trimmed}
+
+Return ONLY a JSON object with NO extra text, NO markdown, NO backticks:
+{{
+  "title": "clear descriptive name of the tool, concept, or resource (NOT a URL)",
+  "category": "one of: AI Tools / Prompts / APIs & Libraries / Frameworks / UI Design / Tips & Tricks / Other",
+  "summary": "2-3 sentence explanation of what this is, what it does, and why it is useful. Must be informative, not a copy of the title.",
+  "official_link": "the most likely official URL for this tool or resource",
+  "tools_mentioned": ["list", "of", "tools"],
+  "links_mentioned": ["list", "of", "urls"]
+}}
+"""
     return prompt
+
 
 
 # ─── Core Processing ────────────────────────────────────────────────────────
@@ -352,12 +356,12 @@ def _validate_and_build(
     if not title:
         title = original_text[:60].strip().rstrip(".")
     if not summary:
-        summary = original_text[:200].strip()
+        summary = original_text[:500].strip()
 
     return ProcessedContent(
         title=title[:60],
         category=category,
-        summary=summary[:200],
+        summary=summary[:500],
         official_link=official_link,
         tools_mentioned=tools,
         links_mentioned=links,
@@ -382,7 +386,7 @@ def _build_fallback(text: str, reason: str) -> ProcessedContent:
     return ProcessedContent(
         title=title,
         category="Other",
-        summary=text[:200].strip(),
+        summary=text[:500].strip(),
         official_link=official_link,
         tools_mentioned=[],
         links_mentioned=found_links[:10],
@@ -437,20 +441,20 @@ if __name__ == "__main__":
             text_input = f.read()
         print(f"[VaultMCP] Read text from file ({len(text_input)} chars)")
 
-    print(f"[VaultMCP] Processing text ({len(text_input)} chars) with {MISTRAL_MODEL}")
+    print(f"[VaultMCP] Processing text ({len(text_input)} chars) with {PRIMARY_MODEL}")
 
     try:
         result = process_text(text_input, test_token)
 
-        print(f"[VaultMCP] ✓ Processing complete!")
+        print(f"[VaultMCP] OK: Processing complete!")
         print(f"  Fallback : {'Yes (JSON parsing failed)' if result.was_fallback else 'No (clean JSON)'}")
         print(f"  Result   :")
         print(json.dumps(result_to_dict(result), indent=2))
 
     except InvalidTokenError as e:
-        print(f"[VaultMCP] ✗ Token error: {e}")
+        print(f"[VaultMCP] ERROR: Token error: {e}")
         sys.exit(1)
 
     except ProcessingError as e:
-        print(f"[VaultMCP] ✗ Processing failed: {e}")
+        print(f"[VaultMCP] ERROR: Processing failed: {e}")
         sys.exit(1)

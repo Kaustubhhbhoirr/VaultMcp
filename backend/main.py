@@ -13,6 +13,7 @@ All routes wired with real logic:
 import os
 import re
 import traceback
+import json
 from datetime import datetime
 from typing import Optional
 
@@ -211,7 +212,28 @@ async def root_index():
 
 
 async def get_youtube_metadata(url: str) -> str:
-    """Extract YouTube video metadata (og:title, og:description) using httpx."""
+    """Extract YouTube video metadata (title, description) using oEmbed + og tags + fallbacks."""
+    video_id = None
+    id_match = re.search(r"(?:shorts/|v=|embed/|youtu\.be/|watch\?v=)([\w-]+)", url)
+    if id_match:
+        video_id = id_match.group(1)
+        
+    og_title = ""
+    og_desc = ""
+    
+    # 1. Try oEmbed API first to get a clean title
+    if video_id:
+        try:
+            oembed_url = f"https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v={video_id}&format=json"
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                oembed_resp = await client.get(oembed_url)
+                if oembed_resp.status_code == 200:
+                    oembed_data = oembed_resp.json()
+                    og_title = oembed_data.get("title", "")
+        except Exception as e:
+            print(f"[YouTube Metadata] oEmbed query failed: {e}", flush=True)
+
+    # 2. Scrape the page HTML for title and description fallbacks
     try:
         async with httpx.AsyncClient(
             timeout=15.0,
@@ -222,25 +244,36 @@ async def get_youtube_metadata(url: str) -> str:
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
                     "Chrome/120.0.0.0 Safari/537.36"
                 ),
+                "Accept-Language": "en-US,en;q=0.9",
             },
         ) as client:
             response = await client.get(url)
             if response.status_code == 200:
                 html = response.text
                 
-                # Extract og:title
-                title_match = re.search(
-                    r'<meta\s+[^>]*property=["\']og:title["\'][^>]*content=["\'](.*?)["\']',
-                    html, re.IGNORECASE
-                )
-                if not title_match:
+                # If oEmbed didn't yield a title, search og:title tag
+                if not og_title:
                     title_match = re.search(
-                        r'<meta\s+[^>]*content=["\'](.*?)["\'][^>]*property=["\']og:title["\']',
+                        r'<meta\s+[^>]*property=["\']og:title["\'][^>]*content=["\'](.*?)["\']',
                         html, re.IGNORECASE
                     )
-                og_title = title_match.group(1).strip() if title_match else ""
+                    if not title_match:
+                        title_match = re.search(
+                            r'<meta\s+[^>]*content=["\'](.*?)["\'][^>]*property=["\']og:title["\']',
+                            html, re.IGNORECASE
+                        )
+                    if title_match:
+                        og_title = title_match.group(1).strip()
                 
-                # Extract og:description
+                # If still no title, look for title tag
+                if not og_title:
+                    title_tag = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE)
+                    if title_tag:
+                        t_val = title_tag.group(1).strip()
+                        if t_val and t_val != "YouTube" and t_val != "- YouTube":
+                            og_title = t_val.replace(" - YouTube", "")
+                
+                # Try to extract description from og:description
                 desc_match = re.search(
                     r'<meta\s+[^>]*property=["\']og:description["\'][^>]*content=["\'](.*?)["\']',
                     html, re.IGNORECASE
@@ -250,19 +283,57 @@ async def get_youtube_metadata(url: str) -> str:
                         r'<meta\s+[^>]*content=["\'](.*?)["\'][^>]*property=["\']og:description["\']',
                         html, re.IGNORECASE
                     )
-                og_desc = desc_match.group(1).strip() if desc_match else ""
+                if desc_match:
+                    og_desc = desc_match.group(1).strip()
                 
-                parts = []
-                if og_title:
-                    parts.append(f"YouTube Video Title: {og_title}")
+                # Try name="description"
+                if not og_desc:
+                    desc_match = re.search(
+                        r'<meta\s+[^>]*name=["\']description["\'][^>]*content=["\'](.*?)["\']',
+                        html, re.IGNORECASE
+                    )
+                    if desc_match:
+                        og_desc = desc_match.group(1).strip()
+                
+                # Filter out generic YouTube placeholder descriptions
                 if og_desc:
-                    parts.append(f"Description: {og_desc}")
+                    generic_signatures = [
+                        "enjoy the videos and music",
+                        "upload original content",
+                        "share it all with friends",
+                        "family and the world on youtube"
+                    ]
+                    if any(sig in og_desc.lower() for sig in generic_signatures):
+                        og_desc = ""
                 
-                if parts:
-                    return "\n".join(parts)
+                # Fallback to parsing ytInitialPlayerResponse JSON script block
+                if not og_desc or not og_title:
+                    player_match = re.search(r'ytInitialPlayerResponse\s*=\s*(\{.*?\});', html)
+                    if player_match:
+                        try:
+                            player_data = json.loads(player_match.group(1))
+                            video_details = player_data.get("videoDetails", {})
+                            if not og_title:
+                                og_title = video_details.get("title", "")
+                            desc_val = video_details.get("shortDescription", "")
+                            if desc_val and not og_desc:
+                                og_desc = desc_val.strip()
+                        except Exception:
+                            pass
     except Exception as e:
-        print(f"[YouTube Metadata] httpx scrape failed: {e}", flush=True)
+        print(f"[YouTube Metadata] httpx page scrape failed: {e}", flush=True)
+
+    parts = []
+    if og_title:
+        parts.append(f"YouTube Video Title: {og_title}")
+    if og_desc:
+        parts.append(f"Description: {og_desc}")
+    
+    if parts:
+        return "\n".join(parts)
+        
     return f"YouTube URL: {url}"
+
 
 
 async def get_instagram_metadata(url: str) -> str:
