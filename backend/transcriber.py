@@ -26,7 +26,7 @@ import httpx
 
 # Whisper model endpoint on HF Inference API
 WHISPER_MODEL = "openai/whisper-large-v3-turbo"
-HF_INFERENCE_URL = f"https://api-inference.huggingface.co/models/{WHISPER_MODEL}"
+HF_INFERENCE_URL = f"https://router.huggingface.co/hf-inference/models/{WHISPER_MODEL}"
 
 # Retry settings for HF API (free tier can be slow / rate-limited)
 MAX_RETRIES = 5
@@ -57,16 +57,22 @@ class RateLimitError(TranscriptionError):
     pass
 
 
+def is_hindi(text: str) -> bool:
+    """Check if text contains Devnagari characters (indicative of Hindi)."""
+    return any(0x0900 <= ord(char) <= 0x097F for char in text)
+
+
 # ─── Result Container ───────────────────────────────────────────────────────
 
 @dataclass
 class TranscriptionResult:
     """Holds the result of a successful transcription."""
-    text: str                           # The transcribed text
+    text: str                           # The transcribed text (original, e.g. Hindi)
     audio_path: str                     # Path to the audio file that was transcribed
     model: str                          # Model used for transcription
     audio_size_kb: float                # Size of the audio file in KB
     retries_used: int                   # Number of retries needed (0 = first attempt worked)
+    translation: Optional[str] = None   # English translation if original was Hindi
 
 
 # ─── Core Transcription ─────────────────────────────────────────────────────
@@ -74,6 +80,7 @@ class TranscriptionResult:
 def transcribe_audio(audio_path: str, hf_token: str) -> TranscriptionResult:
     """
     Transcribe an audio file using Whisper via the Hugging Face Inference API.
+    Auto-detects language and performs translation if Hindi is detected.
 
     Args:
         audio_path: Absolute path to the .mp3 audio file.
@@ -87,6 +94,7 @@ def transcribe_audio(audio_path: str, hf_token: str) -> TranscriptionResult:
         InvalidTokenError:   If the HF token is invalid or expired.
         RateLimitError:      If HF rate limit is hit and all retries are exhausted.
     """
+    import base64
 
     # ── Validate inputs ──────────────────────────────────────────────────
     if not hf_token or not hf_token.strip():
@@ -110,20 +118,35 @@ def transcribe_audio(audio_path: str, hf_token: str) -> TranscriptionResult:
             f"HF Inference API limit is {MAX_FILE_SIZE_BYTES // (1024 * 1024)} MB."
         )
 
-    # ── Read audio binary ────────────────────────────────────────────────
+    # ── Read audio binary and base64-encode ──────────────────────────────
     try:
         with open(audio_path, "rb") as f:
             audio_bytes = f.read()
+        audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
     except IOError as e:
         raise TranscriptionError(f"Cannot read audio file {audio_path}: {e}") from e
 
     # ── Send to HF Inference API with retry logic ────────────────────────
     headers = {
         "Authorization": f"Bearer {hf_token.strip()}",
+        "Content-Type": "application/json",
+    }
+
+    # First task: auto-detect and transcribe
+    transcribe_payload = {
+        "inputs": audio_b64,
+        "parameters": {
+            "generate_kwargs": {
+                "task": "transcribe",
+                "language": None  # Auto detect language
+            }
+        }
     }
 
     backoff = INITIAL_BACKOFF_SECONDS
     last_error: Optional[Exception] = None
+    transcription_text = None
+    retries_used = 0
 
     for attempt in range(MAX_RETRIES):
         try:
@@ -131,18 +154,20 @@ def transcribe_audio(audio_path: str, hf_token: str) -> TranscriptionResult:
                 response = client.post(
                     HF_INFERENCE_URL,
                     headers=headers,
-                    content=audio_bytes,
+                    json=transcribe_payload,
                 )
 
             # ── Handle HTTP status codes ─────────────────────────────
             if response.status_code == 200:
-                # Success — parse the response
-                return _parse_response(
+                result = _parse_response(
                     response=response,
                     audio_path=audio_path,
                     file_size=file_size,
                     retries_used=attempt,
                 )
+                transcription_text = result.text
+                retries_used = attempt
+                break
 
             if response.status_code == 401:
                 raise InvalidTokenError(
@@ -157,13 +182,11 @@ def transcribe_audio(audio_path: str, hf_token: str) -> TranscriptionResult:
                 )
 
             if response.status_code == 429:
-                # Rate limited — retry with backoff
                 last_error = RateLimitError(
                     f"HF API rate limit hit (attempt {attempt + 1}/{MAX_RETRIES})."
                 )
 
             elif response.status_code == 503:
-                # Model is loading (cold start) — retry
                 body = _safe_json(response)
                 estimated_time = body.get("estimated_time", backoff) if body else backoff
                 backoff = min(float(estimated_time), MAX_BACKOFF_SECONDS)
@@ -173,7 +196,6 @@ def transcribe_audio(audio_path: str, hf_token: str) -> TranscriptionResult:
                 )
 
             else:
-                # Other error
                 body = _safe_json(response)
                 error_detail = body.get("error", response.text[:200]) if body else response.text[:200]
                 raise TranscriptionError(
@@ -186,17 +208,68 @@ def transcribe_audio(audio_path: str, hf_token: str) -> TranscriptionResult:
             )
 
         except (InvalidTokenError, TranscriptionError):
-            # Don't retry auth errors or hard failures — re-raise immediately
             raise
 
-        # ── Wait before retry ────────────────────────────────────────
         if attempt < MAX_RETRIES - 1:
             time.sleep(backoff)
             backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
 
-    # All retries exhausted
-    raise RateLimitError(
-        f"Transcription failed after {MAX_RETRIES} attempts. Last error: {last_error}"
+    if transcription_text is None:
+        raise RateLimitError(
+            f"Transcription failed after {MAX_RETRIES} attempts. Last error: {last_error}"
+        )
+
+    # ── Step 4: Optional translation if Hindi is detected ───────────────
+    translation_text = None
+    if is_hindi(transcription_text):
+        print(f"[Transcriber] Hindi detected in transcript. Initiating English translation call...", flush=True)
+        translate_payload = {
+            "inputs": audio_b64,
+            "parameters": {
+                "generate_kwargs": {
+                    "task": "translate"
+                }
+            }
+        }
+        
+        backoff = INITIAL_BACKOFF_SECONDS
+        for attempt in range(MAX_RETRIES):
+            try:
+                with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+                    response = client.post(
+                        HF_INFERENCE_URL,
+                        headers=headers,
+                        json=translate_payload,
+                    )
+                if response.status_code == 200:
+                    trans_result = _parse_response(
+                        response=response,
+                        audio_path=audio_path,
+                        file_size=file_size,
+                        retries_used=attempt,
+                    )
+                    translation_text = trans_result.text
+                    print(f"[Transcriber] Hindi translation successful.", flush=True)
+                    break
+                elif response.status_code == 429 or response.status_code == 503:
+                    # Let it retry for rate limit/cold start
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
+                else:
+                    break
+            except Exception as e:
+                print(f"[Transcriber] Hindi translation attempt {attempt+1} failed: {e}", flush=True)
+                if attempt < MAX_RETRIES - 1:
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
+
+    return TranscriptionResult(
+        text=transcription_text,
+        audio_path=audio_path,
+        model=WHISPER_MODEL,
+        audio_size_kb=round(file_size / 1024, 1),
+        retries_used=retries_used,
+        translation=translation_text,
     )
 
 

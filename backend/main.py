@@ -293,15 +293,20 @@ async def process_content(request: ProcessRequest):
             # ── Step 3: Transcribe audio ─────────────────────────────
             try:
                 transcription = transcribe_audio(audio_path, hf_token)
-                text_for_ai = transcription.text
-
-                # Prepend video title if available for better AI context
-                if extraction.title:
-                    text_for_ai = f"Video title: {extraction.title}\n\nTranscript:\n{text_for_ai}"
+                
+                # Use English translation for AI processor if available, otherwise original text
+                if transcription.translation:
+                    text_for_ai = transcription.translation
+                    if extraction.title:
+                        text_for_ai = f"Video title: {extraction.title}\n\nTranscript (Translated to English):\n{text_for_ai}"
+                else:
+                    text_for_ai = transcription.text
+                    if extraction.title:
+                        text_for_ai = f"Video title: {extraction.title}\n\nTranscript:\n{text_for_ai}"
 
                 pipeline_steps.append({
                     "step": 3, "name": "transcribe", "status": "done",
-                    "detail": f"Transcribed {transcription.audio_size_kb} KB, {len(transcription.text)} chars",
+                    "detail": f"Transcribed {transcription.audio_size_kb} KB, {len(transcription.text)} chars" + (f" (translated from Hindi)" if transcription.translation else ""),
                 })
             except HFInvalidTokenError as e:
                 pipeline_steps.append({
@@ -388,6 +393,7 @@ async def process_content(request: ProcessRequest):
                 "links_mentioned": processed.links_mentioned,
                 "md_entry": md_entry,
                 "saved_on": saved_on,
+                "translation": transcription.translation if "transcription" in locals() and hasattr(transcription, "translation") else None,
             },
             "pipeline_steps": pipeline_steps,
             "input_type": input_type,

@@ -146,16 +146,30 @@ def extract_audio(url: str) -> ExtractionResult:
             "preferredquality": "128",
         })
 
-    # yt-dlp options: audio only, convert to mp3 if ffmpeg is present, otherwise native m4a
+    # Custom logger to print everything yt-dlp returns to server logs
+    class YDLogger:
+        def debug(self, msg):
+            print(f"[yt-dlp debug] {msg}", flush=True)
+        def warning(self, msg):
+            print(f"[yt-dlp warning] {msg}", flush=True)
+        def error(self, msg):
+            print(f"[yt-dlp error] {msg}", flush=True)
+
+    print(f"[Audio Extractor] URL: {url}", flush=True)
+    print(f"[Audio Extractor] FFmpeg available: {ffmpeg_available}", flush=True)
+    print(f"[Audio Extractor] Temp output template: {output_template}", flush=True)
+
+    # yt-dlp options: audio only, convert to mp3 if ffmpeg is present, otherwise native formats
     ydl_opts = {
         # Extract audio only — no video download
         "format": "bestaudio[ext=m4a]/bestaudio/best" if not ffmpeg_available else "bestaudio/best",
         "outtmpl": f"{output_template}.%(ext)s",
         "postprocessors": postprocessors,
 
-        # Suppress terminal output (we handle errors ourselves)
-        "quiet": True,
-        "no_warnings": True,
+        # Verbose terminal output for HF Space logs
+        "quiet": False,
+        "no_warnings": False,
+        "logger": YDLogger(),
 
         # Network resilience
         "retries": 3,
@@ -200,6 +214,7 @@ def extract_audio(url: str) -> ExtractionResult:
 
     except yt_dlp.utils.DownloadError as e:
         error_msg = str(e).lower()
+        print(f"[Audio Extractor] DownloadError occurred: {error_msg}", flush=True)
 
         if "private" in error_msg or "login" in error_msg:
             raise ExtractionError(
@@ -221,24 +236,31 @@ def extract_audio(url: str) -> ExtractionResult:
         ) from e
 
     except Exception as e:
+        print(f"[Audio Extractor] Unexpected Exception occurred: {e}", flush=True)
         raise ExtractionError(
             f"Unexpected error extracting audio from {url}: {e}"
         ) from e
 
     # Find the output audio file
     expected_path = f"{output_template}.{preferred_ext}"
+    print(f"[Audio Extractor] Checking expected path: {expected_path}", flush=True)
 
     if not os.path.exists(expected_path):
+        print(f"[Audio Extractor] Expected file not found. Scanning directory: {temp_dir}", flush=True)
         # yt-dlp sometimes uses a slightly different name — scan the temp dir
         for filename in os.listdir(temp_dir):
-            if filename.startswith(f"vaultmcp_{file_id}") and filename.endswith((".mp3", ".m4a", ".webm")):
+            print(f"[Audio Extractor] Found temp file: {filename}", flush=True)
+            if filename.startswith(f"vaultmcp_{file_id}") and filename.endswith((".mp3", ".m4a", ".webm", ".opus", ".aac", ".ogg", ".wav", ".3gp")):
                 expected_path = os.path.join(temp_dir, filename)
+                print(f"[Audio Extractor] Matching file resolved: {expected_path}", flush=True)
                 break
         else:
             raise ExtractionError(
                 f"Audio extraction completed but file not found. "
                 f"FFmpeg may not be installed or the download failed."
             )
+    else:
+        print(f"[Audio Extractor] Expected file exists: {expected_path}", flush=True)
 
     return ExtractionResult(
         audio_path=expected_path,
