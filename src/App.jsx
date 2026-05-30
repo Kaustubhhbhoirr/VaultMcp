@@ -155,6 +155,12 @@ export default function App() {
       }
 
     } catch (err) {
+      let errMsg = err.message;
+      if (errMsg.includes('403') || errMsg.includes('permissions') || errMsg.includes('Inference Provider')) {
+        errMsg = "HF Token needs Inference Provider permissions. Go to huggingface.co/settings/tokens → update token → enable Inference Providers";
+      } else {
+        errMsg = `Could not process. Try again. (${err.message})`;
+      }
       // Replace the processing message with an error
       setMessages(prev => prev.map(m => m.id === msgId ? {
         ...m,
@@ -162,7 +168,7 @@ export default function App() {
         isExtracting: false,
         isError: true,
         label: undefined,
-        text: `● ERROR — Could not process. Try again. (${err.message})`,
+        text: `● ERROR — ${errMsg}`,
       } : m));
     }
   }, [user.hfToken, user.isDriveConnected, user.driveAccessToken, user.driveRefreshToken, setMessages, setVaultItems]);

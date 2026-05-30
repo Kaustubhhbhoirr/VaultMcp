@@ -28,6 +28,9 @@ export async function processContent(content, hfToken) {
   });
 
   if (!res.ok) {
+    if (res.status === 403) {
+      throw new Error("HF Token needs Inference Provider permissions. Go to huggingface.co/settings/tokens → update token → enable Inference Providers");
+    }
     const err = await res.json().catch(() => ({ detail: res.statusText }));
     throw new Error(err.detail || `API error: ${res.status}`);
   }

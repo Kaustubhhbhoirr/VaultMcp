@@ -210,33 +210,58 @@ async def root_index():
     }
 
 
-def get_youtube_metadata(url: str) -> str:
-    """Extract YouTube video metadata (title, description, tags) using yt-dlp."""
-    import yt_dlp
-    ydl_opts = {
-        "skip_download": True,
-        "quiet": True,
-        "no_warnings": True,
-        "extract_flat": False,
-    }
+async def get_youtube_metadata(url: str) -> str:
+    """Extract YouTube video metadata (og:title, og:description) using httpx."""
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            if info:
-                title = info.get("title", "")
-                description = info.get("description", "")
-                tags = info.get("tags", [])
-                tags_str = ", ".join(tags) if tags else ""
+        async with httpx.AsyncClient(
+            timeout=15.0,
+            follow_redirects=True,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                ),
+            },
+        ) as client:
+            response = await client.get(url)
+            if response.status_code == 200:
+                html = response.text
                 
-                parts = [
-                    f"YouTube Video Title: {title}",
-                    f"Description: {description}"
-                ]
-                if tags_str:
-                    parts.append(f"Tags: {tags_str}")
-                return "\n".join(parts)
+                # Extract og:title
+                title_match = re.search(
+                    r'<meta\s+[^>]*property=["\']og:title["\'][^>]*content=["\'](.*?)["\']',
+                    html, re.IGNORECASE
+                )
+                if not title_match:
+                    title_match = re.search(
+                        r'<meta\s+[^>]*content=["\'](.*?)["\'][^>]*property=["\']og:title["\']',
+                        html, re.IGNORECASE
+                    )
+                og_title = title_match.group(1).strip() if title_match else ""
+                
+                # Extract og:description
+                desc_match = re.search(
+                    r'<meta\s+[^>]*property=["\']og:description["\'][^>]*content=["\'](.*?)["\']',
+                    html, re.IGNORECASE
+                )
+                if not desc_match:
+                    desc_match = re.search(
+                        r'<meta\s+[^>]*content=["\'](.*?)["\'][^>]*property=["\']og:description["\']',
+                        html, re.IGNORECASE
+                    )
+                og_desc = desc_match.group(1).strip() if desc_match else ""
+                
+                parts = []
+                if og_title:
+                    parts.append(f"YouTube Video Title: {og_title}")
+                if og_desc:
+                    parts.append(f"Description: {og_desc}")
+                
+                if parts:
+                    return "\n".join(parts)
     except Exception as e:
-        print(f"[YouTube Metadata] yt-dlp extract_info failed: {e}", flush=True)
+        print(f"[YouTube Metadata] httpx scrape failed: {e}", flush=True)
     return f"YouTube URL: {url}"
 
 
@@ -347,7 +372,7 @@ async def process_content(request: ProcessRequest):
     # ── Step 2: Retrieve metadata/content based on input type ────────────
     if input_type == "youtube":
         try:
-            metadata = get_youtube_metadata(content)
+            metadata = await get_youtube_metadata(content)
             text_for_ai = metadata
             pipeline_steps.append({
                 "step": 2, "name": "youtube_metadata", "status": "done",
@@ -411,7 +436,8 @@ async def process_content(request: ProcessRequest):
             "step": 3, "name": "ai_structure", "status": "error",
             "detail": str(e),
         })
-        raise HTTPException(status_code=401, detail=f"HF token error: {e}")
+        status_code = 403 if "Inference Provider" in str(e) else 401
+        raise HTTPException(status_code=status_code, detail=f"HF token error: {e}")
     except ProcessingError as e:
         pipeline_steps.append({
             "step": 3, "name": "ai_structure", "status": "error",

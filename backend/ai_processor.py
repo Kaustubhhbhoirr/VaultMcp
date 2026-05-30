@@ -25,7 +25,7 @@ import httpx
 # ─── Configuration ───────────────────────────────────────────────────────────
 
 MISTRAL_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
-HF_INFERENCE_URL = f"https://api-inference.huggingface.co/models/{MISTRAL_MODEL}"
+HF_INFERENCE_URL = "https://router.huggingface.co/v1/chat/completions"
 
 # Valid categories — the LLM must pick one of these
 VALID_CATEGORIES = [
@@ -98,7 +98,7 @@ def _build_prompt(text: str) -> str:
         "}\n"
         f"Text: {trimmed}"
     )
-    return f"<s>[INST] {prompt} [/INST]"
+    return prompt
 
 
 # ─── Core Processing ────────────────────────────────────────────────────────
@@ -137,13 +137,12 @@ def process_text(text: str, hf_token: str) -> ProcessedContent:
     }
 
     payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens": 500,
-            "temperature": 0.1,         # Low temp for consistent structured output
-            "return_full_text": False,   # Only return the generated portion
-            "do_sample": True,
-        },
+        "model": MISTRAL_MODEL,
+        "messages": [
+            {"role": "user", "content": prompt}
+        ],
+        "max_tokens": 500,
+        "temperature": 0.1,
     }
 
     # ── Send to HF Inference API with retry logic ────────────────────────
@@ -171,7 +170,8 @@ def process_text(text: str, hf_token: str) -> ProcessedContent:
 
             if response.status_code == 403:
                 raise InvalidTokenError(
-                    "Hugging Face token does not have permission to access this model."
+                    "HF Token needs Inference Provider permissions. "
+                    "Go to huggingface.co/settings/tokens → update token → enable Inference Providers"
                 )
 
             if response.status_code == 429:
@@ -229,17 +229,27 @@ def _parse_llm_response(response: httpx.Response, original_text: str) -> Process
     if body is None:
         return _build_fallback(original_text, "HF API returned non-JSON response.")
 
-    # HF Inference API returns a list: [{"generated_text": "..."}]
-    if isinstance(body, list) and len(body) > 0:
-        generated = body[0]
-        if isinstance(generated, dict):
-            raw_output = generated.get("generated_text", "")
+    raw_output = ""
+    # ── Handle OpenAI-compatible response format ─────────────────────
+    if isinstance(body, dict) and "choices" in body:
+        choices = body.get("choices", [])
+        if choices and isinstance(choices, list) and len(choices) > 0:
+            message = choices[0].get("message", {})
+            if isinstance(message, dict):
+                raw_output = message.get("content", "")
+
+    # ── Legacy/Alternative response format fallback ──────────────────
+    if not raw_output:
+        if isinstance(body, list) and len(body) > 0:
+            generated = body[0]
+            if isinstance(generated, dict):
+                raw_output = generated.get("generated_text", "")
+            else:
+                raw_output = str(generated)
+        elif isinstance(body, dict):
+            raw_output = body.get("generated_text", json.dumps(body))
         else:
-            raw_output = str(generated)
-    elif isinstance(body, dict):
-        raw_output = body.get("generated_text", json.dumps(body))
-    else:
-        raw_output = str(body)
+            raw_output = str(body)
 
     raw_output = raw_output.strip()
 
