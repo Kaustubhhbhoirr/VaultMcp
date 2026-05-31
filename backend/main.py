@@ -15,6 +15,7 @@ import re
 import traceback
 import json
 import base64
+import logging
 from datetime import datetime
 from typing import Optional
 
@@ -23,6 +24,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from pydantic import BaseModel
 import httpx
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
+logger = logging.getLogger(__name__)
 
 # ─── Local Modules ───────────────────────────────────────────────────────────
 from ai_processor import (
@@ -117,19 +125,25 @@ def detect_input_type(content: str) -> str:
     Returns: "instagram" | "youtube" | "github" | "website" | "text"
     """
     content = content.strip()
+    logger.info(f"[detect_input_type] Evaluating content: {content}")
 
     if INSTAGRAM_RE.match(content):
+        logger.info("[detect_input_type] Match found: instagram")
         return "instagram"
 
     if YOUTUBE_RE.match(content):
+        logger.info("[detect_input_type] Match found: youtube")
         return "youtube"
 
     if GITHUB_RE.match(content):
+        logger.info("[detect_input_type] Match found: github")
         return "github"
 
     if GENERIC_URL_RE.match(content):
+        logger.info("[detect_input_type] Match found: website")
         return "website"
 
+    logger.info("[detect_input_type] Match found: text (default fallback)")
     return "text"
 
 
@@ -209,55 +223,52 @@ async def get_github_metadata(url: str) -> str:
     """Fetch GitHub repository metadata using the public GitHub API."""
     match = GITHUB_RE.search(url)
     if not match:
+        logger.warning(f"Could not parse GitHub owner/repo from URL: {url}")
         return f"GitHub URL: {url}"
     
     owner = match.group(1)
     repo = match.group(2)
-    
-    # Strip trailing .git
     if repo.lower().endswith(".git"):
         repo = repo[:-4]
         
     api_url = f"https://api.github.com/repos/{owner}/{repo}"
-    readme_url = f"https://api.github.com/repos/{owner}/{repo}/readme"
-    headers = {"User-Agent": "VaultMCP-Backend"}
+    logger.info(f"Fetching GitHub API: {api_url}")
     
-    repo_data = {}
-    readme_text = ""
-    
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        try:
-            resp = await client.get(api_url, headers=headers)
-            if resp.status_code == 200:
-                repo_data = resp.json()
-        except Exception as e:
-            print(f"[GitHub API] Repo info fetch failed: {e}", flush=True)
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(api_url, headers={
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "VaultMCP-Backend"
+            })
+            data = r.json()
+            logger.info(f"GitHub API response: {data}")
             
-        try:
-            resp = await client.get(readme_url, headers=headers)
-            if resp.status_code == 200:
-                readme_data = resp.json()
+            # Also fetch README
+            readme_url = f"https://api.github.com/repos/{owner}/{repo}/readme"
+            readme_r = await client.get(readme_url, headers={
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "VaultMCP-Backend"
+            })
+            readme_text = ""
+            if readme_r.status_code == 200:
+                readme_data = readme_r.json()
                 content_b64 = readme_data.get("content", "")
                 if content_b64:
-                    readme_bytes = base64.b64decode(content_b64)
-                    readme_text = readme_bytes.decode("utf-8", errors="ignore")[:1000]
-        except Exception as e:
-            print(f"[GitHub API] README fetch failed: {e}", flush=True)
-            
-    if not repo_data:
-        return f"GitHub URL: {url} (Failed to fetch API metadata)"
-        
-    parts = [
-        f"Repo: {repo_data.get('full_name', f'{owner}/{repo}')}",
-        f"Description: {repo_data.get('description', '')}",
-        f"Language: {repo_data.get('language', '')}",
-        f"Stars: {repo_data.get('stargazers_count', 0)}",
-        f"Topics: {', '.join(repo_data.get('topics', []))}",
-    ]
-    if readme_text:
-        parts.append(f"README preview:\n{readme_text}")
-        
-    return "\n".join(parts)
+                    readme_text = base64.b64decode(content_b64).decode('utf-8', errors='ignore')[:1000]
+            else:
+                logger.warning(f"GitHub README response status: {readme_r.status_code}")
+                
+            return f"""
+Repository: {data.get('full_name')}
+Description: {data.get('description')}
+Language: {data.get('language')}
+Stars: {data.get('stargazers_count')}
+Topics: {data.get('topics')}
+README: {readme_text}
+"""
+    except Exception as e:
+        logger.error(f"Error fetching GitHub metadata: {e}")
+        return f"GitHub URL: {url} (Failed to fetch API metadata: {e})"
 
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
@@ -274,145 +285,18 @@ async def root_index():
 
 
 async def get_youtube_metadata(url: str) -> str:
-    """Extract YouTube video metadata (title, description, author) using oEmbed + noembed + HTML scraping fallbacks."""
-    video_id = None
-    id_match = re.search(r"(?:shorts/|v=|embed/|youtu\.be/|watch\?v=)([\w-]+)", url)
-    if id_match:
-        video_id = id_match.group(1)
-        
-    title = ""
-    author = ""
-    description = ""
-    
-    # We construct a standard watch URL to ensure oEmbed and noembed can resolve it (especially for Shorts)
-    watch_url = f"https://www.youtube.com/watch?v={video_id}" if video_id else url
-    
-    # 1. Fetch from YouTube oEmbed API
+    """Extract YouTube video metadata (title, author) using noembed."""
+    logger.info(f"Fetching YouTube metadata using noembed for: {url}")
     try:
-        oembed_url = f"https://www.youtube.com/oembed?url={watch_url}&format=json"
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            oembed_resp = await client.get(oembed_url)
-            if oembed_resp.status_code == 200:
-                oembed_data = oembed_resp.json()
-                title = oembed_data.get("title", "")
-                author = oembed_data.get("author_name", "")
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(f"https://noembed.com/embed?url={url}")
+            logger.info(f"YouTube noembed response status: {r.status_code}")
+            data = r.json()
+            logger.info(f"YouTube noembed payload: {data}")
+            return f"Title: {data.get('title')}\nAuthor: {data.get('author_name')}\nURL: {url}"
     except Exception as e:
-        print(f"[YouTube Metadata] oEmbed query failed: {e}", flush=True)
-
-    # 2. Fetch from noembed API (returns title + author)
-    try:
-        noembed_url = f"https://noembed.com/embed?url={watch_url}"
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            noembed_resp = await client.get(noembed_url)
-            if noembed_resp.status_code == 200:
-                noembed_data = noembed_resp.json()
-                if not title:
-                    title = noembed_data.get("title", "")
-                if not author:
-                    author = noembed_data.get("author_name", "")
-    except Exception as e:
-        print(f"[YouTube Metadata] noembed query failed: {e}", flush=True)
-
-    # 3. HTML Scraping Fallback for Title and Description
-    try:
-        async with httpx.AsyncClient(
-            timeout=10.0,
-            follow_redirects=True,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
-                "Accept-Language": "en-US,en;q=0.9",
-            },
-        ) as client:
-            response = await client.get(url)
-            if response.status_code == 200:
-                html = response.text
-                
-                # Title fallback
-                if not title:
-                    title_match = re.search(
-                        r'<meta\s+[^>]*property=["\']og:title["\'][^>]*content=["\'](.*?)["\']',
-                        html, re.IGNORECASE
-                    )
-                    if not title_match:
-                        title_match = re.search(
-                            r'<meta\s+[^>]*content=["\'](.*?)["\'][^>]*property=["\']og:title["\']',
-                            html, re.IGNORECASE
-                        )
-                    if title_match:
-                        title = title_match.group(1).strip()
-                        
-                if not title:
-                    title_tag = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE)
-                    if title_tag:
-                        t_val = title_tag.group(1).strip()
-                        if t_val and t_val != "YouTube" and t_val != "- YouTube":
-                            title = t_val.replace(" - YouTube", "")
-                
-                # Description scraping
-                desc_match = re.search(
-                    r'<meta\s+[^>]*property=["\']og:description["\'][^>]*content=["\'](.*?)["\']',
-                    html, re.IGNORECASE
-                )
-                if not desc_match:
-                    desc_match = re.search(
-                        r'<meta\s+[^>]*content=["\'](.*?)["\'][^>]*property=["\']og:description["\']',
-                        html, re.IGNORECASE
-                    )
-                if desc_match:
-                    description = desc_match.group(1).strip()
-                
-                if not description:
-                    desc_match = re.search(
-                        r'<meta\s+[^>]*name=["\']description["\'][^>]*content=["\'](.*?)["\']',
-                        html, re.IGNORECASE
-                    )
-                    if desc_match:
-                        description = desc_match.group(1).strip()
-                
-                # Filter generic signatures
-                if description:
-                    generic_signatures = [
-                        "enjoy the videos and music",
-                        "upload original content",
-                        "share it all with friends",
-                        "family and the world on youtube"
-                    ]
-                    if any(sig in description.lower() for sig in generic_signatures):
-                        description = ""
-                
-                # ytInitialPlayerResponse fallback
-                if not description or not title:
-                    player_match = re.search(r'ytInitialPlayerResponse\s*=\s*(\{.*?\});', html)
-                    if player_match:
-                        try:
-                            player_data = json.loads(player_match.group(1))
-                            video_details = player_data.get("videoDetails", {})
-                            if not title:
-                                title = video_details.get("title", "")
-                            desc_val = video_details.get("shortDescription", "")
-                            if desc_val and not description:
-                                description = desc_val.strip()
-                        except Exception:
-                            pass
-    except Exception as e:
-        print(f"[YouTube Metadata] HTML page scrape failed: {e}", flush=True)
-
-    parts = []
-    if title:
-        parts.append(f"YouTube Video Title: {title}")
-    if author:
-        parts.append(f"Channel/Author: {author}")
-    if description:
-        parts.append(f"Description: {description}")
-    
-    if parts:
-        return "\n".join(parts)
-        
-    return f"YouTube URL: {url}"
+        logger.error(f"Error fetching YouTube metadata: {e}")
+        return f"YouTube URL: {url}\n(Failed to fetch noembed metadata: {e})"
 
 
 
