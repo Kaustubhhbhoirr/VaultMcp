@@ -604,19 +604,9 @@ async def process_file(
     if not text_content.strip():
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    original_file_link = ""
     md_file_link = ""
     if drive_access_token:
         try:
-            # Upload Original
-            original_file_link = drive_save_file_to_drive(
-                filename=file.filename,
-                content_bytes=raw_bytes,
-                mime_type=file.content_type or "application/octet-stream",
-                access_token=drive_access_token,
-                refresh_token=drive_refresh_token
-            )
-            
             # Upload MD version
             md_filename = f"{file.filename}.md"
             md_bytes = text_content.encode("utf-8")
@@ -649,7 +639,6 @@ async def process_file(
         processed=processed_dict,
         source_url=f"uploaded file ({file.filename})",
         official_link=official_link,
-        original_file_link=original_file_link,
         md_file_link=md_file_link,
     )
     md_entry = generate_entry_md(entry)
@@ -669,7 +658,6 @@ async def process_file(
         },
         "input_type": "file",
         "filename": file.filename,
-        "original_file_link": original_file_link,
         "md_file_link": md_file_link,
     }
 

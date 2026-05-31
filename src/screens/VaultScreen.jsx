@@ -220,16 +220,7 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry, user
                           SRC: <a className="underline text-tertiary" href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceUrl}</a>
                         </div>
                       )}
-                      {item.originalLink && (
-                        <a 
-                          href={item.originalLink} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="w-full block text-center py-2 mt-2 bg-white text-black font-headline-md retro-border retro-outset active-press cursor-pointer"
-                        >
-                          [ VIEW ORIGINAL ]
-                        </a>
-                      )}
+
                       {item.mdLink && (
                         <div className="flex gap-2 mt-2">
                           <button 
