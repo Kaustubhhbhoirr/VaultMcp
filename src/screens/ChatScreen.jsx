@@ -89,7 +89,7 @@ export default function ChatScreen({ messages, onSendMessage, onSendFile, shared
                               <span className="text-primary-container animate-pulse">●</span> Saving to Drive...
                             </p>
                             <p className="flex items-center gap-2 pt-2 border-t border-secondary-container border-opacity-30">
-                              <span className="text-status-success">✓</span> SAVED — {msg.category} → {msg.title}
+                              <span className="text-status-success">✓</span> SAVED — Check Google Drive → VaultMCP folder → vault.md
                             </p>
                           </>
                         )}

@@ -25,6 +25,9 @@ from google.auth.transport.requests import Request as GoogleAuthRequest
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # ─── Load Environment ────────────────────────────────────────────────────────
@@ -199,6 +202,8 @@ def save_to_drive(md_entry: str, access_token: str, refresh_token: str = None) -
 
         _update_file_content(service, file_id, updated_content)
 
+        logger.info(f"File saved to Drive. File ID: {file_id}, Folder: VaultMCP/vault.md")
+
         return SaveResult(
             file_id=file_id,
             folder_id=folder_id,
@@ -217,6 +222,8 @@ def save_to_drive(md_entry: str, access_token: str, refresh_token: str = None) -
             folder_id=folder_id,
             mime_type=VAULT_MIME_TYPE,
         )
+
+        logger.info(f"File saved to Drive. File ID: {file_id}, Folder: VaultMCP/vault.md")
 
         return SaveResult(
             file_id=file_id,
