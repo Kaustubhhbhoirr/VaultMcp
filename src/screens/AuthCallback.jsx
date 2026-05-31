@@ -6,19 +6,27 @@ export default function AuthCallback() {
     const code = params.get('code');
     const error = params.get('error');
 
+    const authChannel = new BroadcastChannel('google_oauth_channel');
+
     if (code) {
       // Send the code back to the opener (main App window)
       window.opener?.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', code }, window.location.origin);
+      authChannel.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', code });
     } else if (error) {
       window.opener?.postMessage({ type: 'GOOGLE_AUTH_ERROR', error }, window.location.origin);
+      authChannel.postMessage({ type: 'GOOGLE_AUTH_ERROR', error });
     }
 
     // Close the popup window automatically after a brief delay to ensure message transmission
     const timer = setTimeout(() => {
+      authChannel.close();
       window.close();
     }, 1000);
 
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      authChannel.close();
+    };
   }, []);
 
   return (

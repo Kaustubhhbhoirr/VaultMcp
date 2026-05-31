@@ -359,6 +359,33 @@ export default function App() {
         }
       }, { once: true });
 
+      // Bulletproof fallback: BroadcastChannel works even if window.opener is stripped
+      const authChannel = new BroadcastChannel('google_oauth_channel');
+      authChannel.onmessage = async (event) => {
+        if (event.data && event.data.type === 'GOOGLE_AUTH_SUCCESS') {
+          const authCode = event.data.code;
+          authChannel.close();
+          try {
+            const tokens = await exchangeGoogleAuthCode(authCode);
+            setUser(prev => ({
+              ...prev,
+              isDriveConnected: true,
+              driveAccessToken: tokens.access_token,
+              driveRefreshToken: tokens.refresh_token || '',
+            }));
+            showToast("Google Drive authorized successfully!", "success");
+            if (popup) popup.close();
+          } catch (err) {
+            console.error('[VaultMCP] Drive auth token exchange failed via channel:', err);
+            setMessages(prev => [...prev, { sender: 'system', isError: true, text: `● ERROR — Token exchange failed: ${err.message}` }]);
+          }
+        } else if (event.data && event.data.type === 'GOOGLE_AUTH_ERROR') {
+          authChannel.close();
+          setMessages(prev => [...prev, { sender: 'system', isError: true, text: `● ERROR — Google Auth rejected: ${event.data.error}` }]);
+          if (popup) popup.close();
+        }
+      };
+
     } catch (err) {
       console.error('[VaultMCP] Drive auth error:', err.message);
       setMessages(prev => [...prev, {
