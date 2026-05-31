@@ -42,7 +42,15 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onCon
       {/* USER Section */}
       <ScrollReveal>
         <section className="space-y-3">
-          <h2 className="text-on-surface-variant font-label-caps text-label-caps opacity-70 tracking-widest uppercase">USER</h2>
+          <div className="flex justify-between items-center">
+            <h2 className="text-on-surface-variant font-label-caps text-label-caps opacity-70 tracking-widest uppercase">USER</h2>
+            <button 
+              onClick={onClearVault}
+              className="bg-surface-variant text-on-surface retro-border px-3 py-1 font-label-caps text-[10px] retro-outset active-press cursor-pointer"
+            >
+              LOGOUT
+            </button>
+          </div>
           <div className="p-4 retro-border retro-outset bg-surface-panel space-y-2">
             <label className="font-label-caps text-[10px] text-on-surface-variant uppercase">DISPLAY NAME</label>
             <div className="relative">

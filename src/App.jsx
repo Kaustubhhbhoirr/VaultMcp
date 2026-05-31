@@ -545,7 +545,6 @@ export default function App() {
         </div>
         <div className="flex gap-1">
           <button className="window-control bg-window-control-white text-text-main border-2 border-black w-6 h-6 flex items-center justify-center font-bold active-press cursor-pointer">_</button>
-          <button className="window-control bg-window-control-white text-text-main border-2 border-black w-6 h-6 flex items-center justify-center font-bold active-press cursor-pointer">□</button>
           <button 
             onClick={handleClearVault}
             className="window-control bg-window-control-white text-text-main border-2 border-black w-6 h-6 flex items-center justify-center font-bold active-press cursor-pointer"

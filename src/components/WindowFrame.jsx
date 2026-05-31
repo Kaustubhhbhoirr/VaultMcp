@@ -18,12 +18,6 @@ export default function WindowFrame({ title, icon = 'terminal', children, onClos
           </button>
           <button 
             className="w-6 h-6 border-2 border-black bg-window-control-white text-text-main flex items-center justify-center font-bold text-xs active-press cursor-pointer"
-            onClick={() => console.log('Maximize window')}
-          >
-            □
-          </button>
-          <button 
-            className="w-6 h-6 border-2 border-black bg-window-control-white text-text-main flex items-center justify-center font-bold text-xs active-press cursor-pointer"
             onClick={() => {
               if (onClose) onClose();
               else if (confirm("Terminate session?")) {
