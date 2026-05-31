@@ -57,6 +57,7 @@ from drive_handler import (
     get_user_config as drive_get_user_config,
     save_file_to_drive as drive_save_file_to_drive,
     get_file_content as drive_get_file_content,
+    clear_vault_files as drive_clear_vault_files,
     DriveAuthError,
     DriveError,
 )
@@ -689,6 +690,18 @@ async def drive_fetch(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("Unexpected error in /drive/fetch")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/drive/clear")
+async def clear_vault(request: DriveTokenRequest):
+    try:
+        drive_clear_vault_files(request.access_token, request.refresh_token)
+        return {"status": "success", "message": "Vault cleared"}
+    except DriveError as e:
+        logger.error(f"Drive clear failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error in /drive/clear")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

@@ -7,7 +7,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import StatusBar from './components/StatusBar';
 import AuthCallback from './screens/AuthCallback';
 import { isValidUrl, formatRetroDate } from './utils/helpers';
-import { processContent, saveToDrive, getVaultFromDrive, getGoogleAuthUrl, exchangeGoogleAuthCode, healthCheck, processFile, getUserConfig, saveUserConfig } from './utils/api';
+import { processContent, saveToDrive, getVaultFromDrive, getGoogleAuthUrl, exchangeGoogleAuthCode, healthCheck, processFile, getUserConfig, saveUserConfig, clearVault } from './utils/api';
 import { useToast } from './components/RetroToast';
 
 // Initial chat history matching the designs
@@ -503,14 +503,21 @@ export default function App() {
     });
   };
 
-  const handleClearVault = () => {
-    // Only clear vault entries
-    setVaultItems([]);
-    // Save empty vault to Drive
+  const handleClearVault = async () => {
+    // Save empty vault to Drive and delete files
     if (user.isDriveConnected && user.driveAccessToken) {
-      const header = "# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n\n---\n\n";
-      saveToDrive(header, user.driveAccessToken, user.driveRefreshToken, true).catch(console.error);
+      try {
+        await clearVault(user.driveAccessToken, user.driveRefreshToken);
+        const header = "# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n\n---\n\n";
+        await saveToDrive(header, user.driveAccessToken, user.driveRefreshToken, true);
+        showToast('Vault files cleared from Drive', 'success');
+      } catch (err) {
+        console.error(err);
+        showToast('Failed to clear files from Drive', 'error');
+      }
     }
+    // Clear local state
+    setVaultItems([]);
   };
 
 

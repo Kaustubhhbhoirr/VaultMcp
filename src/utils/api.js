@@ -240,3 +240,26 @@ export async function fetchDriveFile(fileId, accessToken, refreshToken = null) {
 
   return res.text();
 }
+
+/**
+ * POST /drive/clear — Delete all vault files (except config.json) from Google Drive.
+ */
+export async function clearVault(accessToken, refreshToken = null) {
+  const payload = {
+    access_token: accessToken,
+    refresh_token: refreshToken || '',
+  };
+
+  const res = await fetch(`${API_BASE}/drive/clear`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `Clear vault error: ${res.status}`);
+  }
+
+  return res.json();
+}

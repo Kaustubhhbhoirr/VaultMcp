@@ -625,12 +625,32 @@ def get_file_content(
     refresh_token: str = None
 ) -> str:
     """Download the textual content of a file from Drive by its file ID."""
-    creds = _build_credentials(access_token, refresh_token)
-    service = _get_drive_service(creds)
+    service = _build_drive_service(access_token, refresh_token)
     try:
         return _download_file_content(service, file_id)
     except Exception as e:
         raise DriveError(f"Failed to download file {file_id}: {e}")
+
+
+def clear_vault_files(access_token: str, refresh_token: str = None) -> None:
+    """Delete all files in VaultMCP Drive folder EXCEPT config.json"""
+    service = _build_drive_service(access_token, refresh_token)
+    folder_id = _find_folder(service)
+    if not folder_id:
+        return
+    
+    # List all files in VaultMCP folder
+    results = service.files().list(
+        q=f"'{folder_id}' in parents",
+        fields="files(id, name)"
+    ).execute()
+    
+    files = results.get('files', [])
+    for file in files:
+        # Keep config.json — delete everything else
+        if file['name'] != 'config.json':
+            service.files().delete(fileId=file['id']).execute()
+            logger.info(f"Deleted: {file['name']}")
 
 
 # ─── CLI Test ────────────────────────────────────────────────────────────────
