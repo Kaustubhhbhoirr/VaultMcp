@@ -264,13 +264,19 @@ async def get_github_metadata(url: str) -> str:
             else:
                 logger.warning(f"GitHub README response status: {readme_r.status_code}")
                 
+            description = data.get('description') or 'No description provided'
+            readme_preview = readme_text[:800] if readme_text else 'No README available'
+            
+            # Build richer context for the AI
             return f"""
-Repository: {data.get('full_name')}
-Description: {data.get('description')}
-Language: {data.get('language')}
-Stars: {data.get('stargazers_count')}
-Topics: {data.get('topics')}
-README: {readme_text}
+GitHub Repository: {data.get('full_name')}
+Description: {description}
+Primary Language: {data.get('language') or 'Not specified'}
+Stars: {data.get('stargazers_count', 0)}
+Topics: {', '.join(data.get('topics') or []) or 'none'}
+README Preview: {readme_preview}
+
+Based on the above, summarize what this repository does.
 """
     except Exception as e:
         logger.error(f"Error fetching GitHub metadata: {e}")

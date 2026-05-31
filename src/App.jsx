@@ -358,6 +358,8 @@ export default function App() {
             
             try {
               const configRes = await getUserConfig(tokens.access_token, tokens.refresh_token);
+              console.log('Config load result:', configRes);
+              console.log('HF token restored:', configRes?.config?.hf_token ? 'YES' : 'NO');
               setUser(prev => {
                 const conf = (configRes.status === 'success' && configRes.config) ? configRes.config : {};
                 const newUser = {
@@ -368,6 +370,7 @@ export default function App() {
                   hfToken: conf.hf_token || prev.hfToken,
                   name: conf.display_name || prev.name,
                 };
+                console.log('Saving config to Drive:', { hfToken: newUser.hfToken, name: newUser.name });
                 saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
                 return newUser;
               });
@@ -419,6 +422,8 @@ export default function App() {
             
             try {
               const configRes = await getUserConfig(tokens.access_token, tokens.refresh_token);
+              console.log('Config load result:', configRes);
+              console.log('HF token restored:', configRes?.config?.hf_token ? 'YES' : 'NO');
               setUser(prev => {
                 const conf = (configRes.status === 'success' && configRes.config) ? configRes.config : {};
                 const newUser = {
@@ -429,6 +434,7 @@ export default function App() {
                   hfToken: conf.hf_token || prev.hfToken,
                   name: conf.display_name || prev.name,
                 };
+                console.log('Saving config to Drive:', { hfToken: newUser.hfToken, name: newUser.name });
                 saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
                 return newUser;
               });
@@ -474,6 +480,7 @@ export default function App() {
     setUser(prev => {
       const newUser = { ...prev, ...userData };
       if (newUser.isDriveConnected && newUser.driveAccessToken) {
+        console.log('Saving config to Drive (onboarding complete):', { hfToken: newUser.hfToken, name: newUser.name });
         saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
       }
       return newUser;
@@ -484,6 +491,7 @@ export default function App() {
     setUser(prev => {
       const newUser = { ...prev, ...updatedData };
       if (newUser.isDriveConnected && newUser.driveAccessToken) {
+        console.log('Saving config to Drive (settings update):', { hfToken: newUser.hfToken, name: newUser.name });
         saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
       }
       return newUser;

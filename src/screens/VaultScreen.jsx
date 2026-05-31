@@ -7,7 +7,7 @@ export default function VaultScreen({ vaultItems }) {
   const [expandedIds, setExpandedIds] = useState(new Set([1])); // default expand the first entry
   const [viewingItem, setViewingItem] = useState(null);
 
-  const categories = ["All", "AI Tools", "Prompts", "APIs & Libraries", "Frameworks", "UI Design", "Tips & Tricks", "Other"];
+  const categories = ["All", "AI Tools", "Dev Tools", "Prompts", "APIs & Libraries", "Frameworks", "UI Design & Inspiration", "Tips & Tricks", "GitHub Repos", "Articles & Resources", "Other"];
 
   const filteredItems = selectedCategory === 'All'
     ? vaultItems
@@ -26,11 +26,14 @@ export default function VaultScreen({ vaultItems }) {
   const handleDownloadVault = () => {
     const CATEGORIES_ORDER = [
       "AI Tools",
+      "Dev Tools",
       "Prompts",
       "APIs & Libraries",
       "Frameworks",
-      "UI Design",
+      "UI Design & Inspiration",
       "Tips & Tricks",
+      "GitHub Repos",
+      "Articles & Resources",
       "Other"
     ];
 
@@ -39,11 +42,14 @@ export default function VaultScreen({ vaultItems }) {
       if (!cat) return "Other";
       const cleaned = cat.trim().toLowerCase();
       if (cleaned === 'ai tools') return 'AI Tools';
+      if (cleaned === 'dev tools') return 'Dev Tools';
       if (cleaned === 'prompts') return 'Prompts';
       if (cleaned === 'apis & libraries' || cleaned === 'apis') return 'APIs & Libraries';
       if (cleaned === 'frameworks') return 'Frameworks';
-      if (cleaned === 'ui design') return 'UI Design';
+      if (cleaned === 'ui design' || cleaned === 'ui design & inspiration') return 'UI Design & Inspiration';
       if (cleaned === 'tips & tricks') return 'Tips & Tricks';
+      if (cleaned === 'github repos' || cleaned === 'github') return 'GitHub Repos';
+      if (cleaned === 'articles & resources' || cleaned === 'articles') return 'Articles & Resources';
       return 'Other';
     };
 

@@ -31,11 +31,14 @@ HF_INFERENCE_URL = "https://router.huggingface.co/v1/chat/completions"
 # Valid categories — the LLM must pick one of these
 VALID_CATEGORIES = [
     "AI Tools",
+    "Dev Tools",
     "Prompts",
     "APIs & Libraries",
     "Frameworks",
-    "UI Design",
+    "UI Design & Inspiration",
     "Tips & Tricks",
+    "GitHub Repos",
+    "Articles & Resources",
     "Other",
 ]
 
@@ -94,7 +97,7 @@ def _build_prompt(text: str) -> str:
 
 Return ONLY this JSON, no extra text, no backticks:
 {{"title": "short name of the website or brand",
-"category": "Must be exactly one of: AI Tools / Prompts / APIs & Libraries / Frameworks / UI Design / Tips & Tricks / Other",
+"category": "Must be exactly one of: AI Tools / Dev Tools / Prompts / APIs & Libraries / Frameworks / UI Design & Inspiration / Tips & Tricks / GitHub Repos / Articles & Resources / Other",
 "summary": "Write 2-3 sentences from the USER'S PERSPECTIVE based on their note. What did THEY observe or like about it? Use phrases like 'This site features...', 'Notable for its...', 'User saved this for its...'",
 "official_link": "the URL from the content",
 "tools_mentioned": [],
@@ -108,7 +111,7 @@ Content: {trimmed}
 Return ONLY a JSON object with NO extra text, NO markdown, NO backticks:
 {{
   "title": "clear descriptive name of the tool, concept, or resource (NOT a URL)",
-  "category": "Must be exactly one of: AI Tools / Prompts / APIs & Libraries / Frameworks / UI Design / Tips & Tricks / Other",
+  "category": "Must be exactly one of: AI Tools / Dev Tools / Prompts / APIs & Libraries / Frameworks / UI Design & Inspiration / Tips & Tricks / GitHub Repos / Articles & Resources / Other",
   "summary": "REQUIRED. Minimum 2-3 sentences explaining: (1) what this tool/concept is, (2) what problem it solves, (3) who should use it. Never leave empty. Never copy the title.",
   "official_link": "the most likely official URL for this tool or resource",
   "tools_mentioned": ["list", "of", "tools"],
