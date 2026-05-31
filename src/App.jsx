@@ -13,32 +13,8 @@ import { useToast } from './components/RetroToast';
 // Initial chat history matching the designs
 const INITIAL_MESSAGES = [
   {
-    sender: 'user',
-    text: 'https://github.com/facebook/react',
-    isUrl: true
-  },
-  {
     sender: 'system',
-    label: 'GITHUB_EXTRACTOR',
-    isExtracting: true,
-    step: 3,
-    category: 'Libraries',
-    title: 'React',
-    summary: 'A declarative, efficient, and flexible JavaScript library for building user interfaces.'
-  },
-  {
-    sender: 'user',
-    text: 'Can you find that tutorial about retro css layouts?',
-    isUrl: false
-  },
-  {
-    sender: 'system',
-    label: 'VAULT_QUERY',
-    isQueryMatch: true,
-    matchCount: 1,
-    title: 'Brutalism in Web Design 1995-2025',
-    date: '12.OCT.2023',
-    fileName: 'NeoBrutalist_Guidelines.pdf'
+    text: '[ CONNECTION ESTABLISHED ] VAULTMCP v1.0 — READY. Paste any link, prompt, or text to save it.',
   }
 ];
 

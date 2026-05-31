@@ -37,13 +37,6 @@ export default function ChatScreen({ messages, onSendMessage, onSendFile, shared
     <div className="flex-grow flex flex-col h-full overflow-hidden p-4 relative bg-background-base">
       {/* Scrollable Chat Area */}
       <div className="flex-1 bg-surface-panel retro-border retro-inset p-4 overflow-y-auto no-scrollbar space-y-6">
-        {/* Welcome Message (System) */}
-        <div className="flex justify-center">
-          <div className="bg-surface-container-low retro-border px-4 py-2 text-center max-w-xs">
-            <p className="font-label-caps text-label-caps text-on-surface-variant uppercase">[ CONNECTION ESTABLISHED ]</p>
-            <p className="font-body-md text-body-md">VAULTMCP v1.0.4 - READY</p>
-          </div>
-        </div>
 
         {/* Chat History */}
         <div className="flex flex-col gap-6">
@@ -103,27 +96,7 @@ export default function ChatScreen({ messages, onSendMessage, onSendFile, shared
                     )}
 
                     {!msg.isExtracting && (
-                      <>
-                        {msg.isQueryMatch ? (
-                          <>
-                            <p className="flex items-center gap-2">
-                              <span className="text-status-success">✓</span> FOUND {msg.matchCount} MATCH: "{msg.title}"
-                            </p>
-                            <p className="opacity-70 text-[11px] pl-5">Saved: {msg.date}</p>
-                            <div className="mt-2 retro-border border-secondary-container bg-surface-dim overflow-hidden flex items-center">
-                              <div className="w-16 h-16 bg-surface-container-highest border-r-2 border-secondary-container flex items-center justify-center">
-                                <span className="material-symbols-outlined text-text-main" data-icon="article">article</span>
-                              </div>
-                              <div className="p-2 text-text-main flex-1">
-                                <p className="font-bold text-[12px]">{msg.fileName}</p>
-                                <p className="text-[10px]">Open in Browser →</p>
-                              </div>
-                            </div>
-                          </>
-                        ) : (
-                          <p>{msg.text}</p>
-                        )}
-                      </>
+                      <p>{msg.text}</p>
                     )}
                   </div>
                 </div>
