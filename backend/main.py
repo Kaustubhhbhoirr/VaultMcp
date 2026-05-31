@@ -508,37 +508,69 @@ async def process_content(request: ProcessRequest):
 
 
 def extract_text_from_file(raw_bytes: bytes, filename: str) -> str:
-    """Extract text content from various file formats."""
+    """Extract text content from various file formats and format as Markdown."""
     ext = filename.lower().split('.')[-1] if '.' in filename else ''
     
     try:
         if ext == 'pdf':
             doc = fitz.open(stream=raw_bytes, filetype="pdf")
-            return "\n".join([page.get_text() for page in doc])
+            extracted = "\n".join([page.get_text() for page in doc])
+            return f"# Document Title\n> Converted from {filename} by VaultMCP\n\n---\n\n{extracted}"
+            
         elif ext == 'docx':
             doc = docx.Document(io.BytesIO(raw_bytes))
-            return "\n".join([p.text for p in doc.paragraphs])
+            parts = []
+            for p in doc.paragraphs:
+                if p.style.name.startswith('Heading'):
+                    level = p.style.name.replace('Heading', '').strip()
+                    try:
+                        level_num = int(level)
+                        parts.append(f"{'#' * level_num} {p.text}")
+                    except ValueError:
+                        parts.append(f"# {p.text}")
+                else:
+                    parts.append(p.text)
+            extracted = "\n".join(parts)
+            return f"# Document Title\n> Converted from {filename} by VaultMCP\n\n---\n\n{extracted}"
+            
         elif ext == 'xlsx':
             wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), data_only=True)
-            lines = []
-            for sheet in wb.worksheets:
-                for row in sheet.iter_rows(values_only=True):
-                    lines.append("\t".join([str(v) if v is not None else "" for v in row]))
-            return "\n".join(lines)
+            parts = [f"# Spreadsheet: {filename}\n> Converted by VaultMCP\n"]
+            for i, sheet in enumerate(wb.worksheets, 1):
+                parts.append(f"## Sheet {i}: {sheet.title}")
+                rows = list(sheet.iter_rows(values_only=True))
+                if not rows:
+                    parts.append("")
+                    continue
+                # Header
+                header = rows[0]
+                parts.append("| " + " | ".join([str(v) if v is not None else "" for v in header]) + " |")
+                parts.append("|" + "|".join(["---" for _ in header]) + "|")
+                # Rows
+                for row in rows[1:]:
+                    parts.append("| " + " | ".join([str(v) if v is not None else "" for v in row]) + " |")
+                parts.append("")
+            return "\n".join(parts)
+            
         elif ext == 'pptx':
             prs = pptx.Presentation(io.BytesIO(raw_bytes))
-            lines = []
-            for slide in prs.slides:
+            parts = [f"# Presentation: {filename}\n> Converted by VaultMCP\n"]
+            for i, slide in enumerate(prs.slides, 1):
+                parts.append(f"## Slide {i}")
                 for shape in slide.shapes:
-                    if hasattr(shape, "text"):
-                        lines.append(shape.text)
-            return "\n".join(lines)
+                    if hasattr(shape, "text") and shape.text.strip():
+                        parts.append(shape.text)
+                parts.append("")
+            return "\n".join(parts)
+            
     except Exception as e:
         logger.error(f"Failed to parse {ext} file: {e}")
         pass
 
-    # Fallback
-    return raw_bytes.decode("utf-8", errors="replace")
+    # Fallback for plain text, unknown types, or failed parsing
+    text = raw_bytes.decode("utf-8", errors="replace")
+    return f"# Document: {filename}\n> Converted by VaultMCP\n\n---\n\n{text}"
+
 
 
 @app.post("/process/file")
@@ -567,10 +599,12 @@ async def process_file(
     file_link = ""
     if drive_access_token:
         try:
+            md_filename = f"{file.filename}.md"
+            md_bytes = text_content.encode("utf-8")
             file_link = drive_save_file_to_drive(
-                filename=file.filename,
-                content_bytes=raw_bytes,
-                mime_type=file.content_type or "application/octet-stream",
+                filename=md_filename,
+                content_bytes=md_bytes,
+                mime_type="text/markdown",
                 access_token=drive_access_token,
                 refresh_token=drive_refresh_token
             )
