@@ -53,6 +53,8 @@ from drive_handler import (
     get_auth_url as drive_get_auth_url,
     save_to_drive as drive_save_to_drive,
     get_vault as drive_get_vault,
+    save_user_config as drive_save_user_config,
+    get_user_config as drive_get_user_config,
     DriveAuthError,
     DriveError,
 )
@@ -111,6 +113,14 @@ class DriveSaveRequest(BaseModel):
 class DriveVaultRequest(BaseModel):
     """Query params for GET /drive/vault."""
     pass
+
+
+class ConfigSaveRequest(BaseModel):
+    """Body for POST /config/save."""
+    access_token: str
+    refresh_token: Optional[str] = None
+    hf_token: Optional[str] = ""
+    display_name: Optional[str] = ""
 
 
 # ─── URL Detection Helpers ──────────────────────────────────────────────────
@@ -570,6 +580,46 @@ async def drive_get_vault_route(
             "content": vault_content,
         }
 
+    except DriveAuthError as e:
+        raise HTTPException(status_code=401, detail=f"Google Drive auth error: {e}")
+    except DriveError as e:
+        raise HTTPException(status_code=500, detail=f"Google Drive error: {e}")
+
+
+@app.post("/config/save")
+async def config_save(request: ConfigSaveRequest):
+    """Save user configuration to Google Drive."""
+    if not request.access_token.strip():
+        raise HTTPException(status_code=400, detail="Google Drive access token is required.")
+
+    config = {
+        "hf_token": request.hf_token,
+        "display_name": request.display_name,
+    }
+    
+    try:
+        drive_save_user_config(config, request.access_token, request.refresh_token)
+        return {"status": "success", "message": "Config saved to Google Drive."}
+    except DriveAuthError as e:
+        raise HTTPException(status_code=401, detail=f"Google Drive auth error: {e}")
+    except DriveError as e:
+        raise HTTPException(status_code=500, detail=f"Google Drive error: {e}")
+
+
+@app.get("/config/load")
+async def config_load(
+    access_token: str = Query(..., description="Google Drive OAuth access token"),
+    refresh_token: Optional[str] = Query(None, description="Google Drive OAuth refresh token"),
+):
+    """Load user configuration from Google Drive."""
+    if not access_token.strip():
+        raise HTTPException(status_code=400, detail="Google Drive access token is required.")
+        
+    try:
+        config = drive_get_user_config(access_token, refresh_token)
+        if config is None:
+            return {"status": "empty", "config": {}}
+        return {"status": "success", "config": config}
     except DriveAuthError as e:
         raise HTTPException(status_code=401, detail=f"Google Drive auth error: {e}")
     except DriveError as e:

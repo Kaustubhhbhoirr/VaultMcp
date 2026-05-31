@@ -159,3 +159,53 @@ export async function processFile(file, hfToken) {
 
   return res.json();
 }
+
+/**
+ * POST /config/save — Save user config to Google Drive.
+ * @param {string} hfToken - User's Hugging Face token
+ * @param {string} displayName - User's display name
+ * @param {string} accessToken - Google Drive OAuth access token
+ * @param {string|null} refreshToken - Google Drive OAuth refresh token
+ * @returns {Promise<object>}
+ */
+export async function saveUserConfig(hfToken, displayName, accessToken, refreshToken = null) {
+  const res = await fetch(`${API_BASE}/config/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      hf_token: hfToken,
+      display_name: displayName,
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `Config save error: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * GET /config/load — Fetch user config from Google Drive.
+ * @param {string} accessToken - Google Drive OAuth access token
+ * @param {string|null} refreshToken - Google Drive OAuth refresh token
+ * @returns {Promise<object>}
+ */
+export async function getUserConfig(accessToken, refreshToken = null) {
+  const params = new URLSearchParams({ access_token: accessToken });
+  if (refreshToken) params.append('refresh_token', refreshToken);
+
+  const res = await fetch(`${API_BASE}/config/load?${params.toString()}`, {
+    method: 'GET',
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `Config load error: ${res.status}`);
+  }
+
+  return res.json();
+}

@@ -16,6 +16,7 @@ Libraries: google-auth, google-api-python-client only.
 
 import os
 import io
+import json
 from dataclasses import dataclass
 from typing import Optional
 
@@ -44,6 +45,8 @@ SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 VAULTMCP_FOLDER_NAME = "VaultMCP"
 VAULT_FILENAME = "vault.md"
 VAULT_MIME_TYPE = "text/markdown"
+CONFIG_FILENAME = "config.json"
+CONFIG_MIME_TYPE = "application/json"
 
 VAULT_HEADER = """# VaultMCP Vault
 
@@ -263,6 +266,44 @@ def get_vault(access_token: str, refresh_token: str = None) -> Optional[str]:
     return _download_file_content(service, file_id)
 
 
+def save_user_config(config: dict, access_token: str, refresh_token: str = None) -> None:
+    """
+    Save user configuration (like HF token and display name) to config.json in Drive.
+    """
+    service = _build_drive_service(access_token, refresh_token)
+    folder_id = _find_or_create_folder(service)
+    file_id = _find_file_in_folder(service, CONFIG_FILENAME, folder_id)
+
+    content = json.dumps(config, indent=2)
+
+    if file_id:
+        _update_file_content(service, file_id, content, mime_type=CONFIG_MIME_TYPE)
+        logger.info(f"Config updated in Drive. File ID: {file_id}")
+    else:
+        file_id = _create_file(service, CONFIG_FILENAME, content, folder_id, mime_type=CONFIG_MIME_TYPE)
+        logger.info(f"Config created in Drive. File ID: {file_id}")
+
+
+def get_user_config(access_token: str, refresh_token: str = None) -> Optional[dict]:
+    """
+    Fetch user configuration from config.json in Drive.
+    """
+    service = _build_drive_service(access_token, refresh_token)
+    folder_id = _find_folder(service)
+    if not folder_id:
+        return None
+
+    file_id = _find_file_in_folder(service, CONFIG_FILENAME, folder_id)
+    if not file_id:
+        return None
+
+    content = _download_file_content(service, file_id)
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return None
+
+
 # ─── Internal: Build Service & Credentials ──────────────────────────────────
 
 def _validate_client_credentials():
@@ -458,7 +499,7 @@ def _download_file_content(service, file_id: str) -> str:
         raise DriveError(f"Failed to download file {file_id}: {e}") from e
 
 
-def _update_file_content(service, file_id: str, content: str):
+def _update_file_content(service, file_id: str, content: str, mime_type: str = VAULT_MIME_TYPE):
     """
     Overwrite a file's content on Google Drive.
 
@@ -466,11 +507,12 @@ def _update_file_content(service, file_id: str, content: str):
         service:  Drive API service.
         file_id:  ID of the file to update.
         content:  New full content string.
+        mime_type: MIME type of the file.
     """
     try:
         media = MediaIoBaseUpload(
             io.BytesIO(content.encode("utf-8")),
-            mimetype=VAULT_MIME_TYPE,
+            mimetype=mime_type,
             resumable=True,
         )
 

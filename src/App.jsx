@@ -7,7 +7,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import StatusBar from './components/StatusBar';
 import AuthCallback from './screens/AuthCallback';
 import { isValidUrl, formatRetroDate } from './utils/helpers';
-import { processContent, saveToDrive, getVaultFromDrive, getGoogleAuthUrl, exchangeGoogleAuthCode, healthCheck, processFile } from './utils/api';
+import { processContent, saveToDrive, getVaultFromDrive, getGoogleAuthUrl, exchangeGoogleAuthCode, healthCheck, processFile, getUserConfig, saveUserConfig } from './utils/api';
 import { useToast } from './components/RetroToast';
 
 // Initial chat history matching the designs
@@ -355,12 +355,31 @@ export default function App() {
 
           try {
             const tokens = await exchangeGoogleAuthCode(authCode);
-            setUser(prev => ({
-              ...prev,
-              isDriveConnected: true,
-              driveAccessToken: tokens.access_token,
-              driveRefreshToken: tokens.refresh_token || '',
-            }));
+            
+            try {
+              const configRes = await getUserConfig(tokens.access_token, tokens.refresh_token);
+              setUser(prev => {
+                const conf = (configRes.status === 'success' && configRes.config) ? configRes.config : {};
+                const newUser = {
+                  ...prev,
+                  isDriveConnected: true,
+                  driveAccessToken: tokens.access_token,
+                  driveRefreshToken: tokens.refresh_token || '',
+                  hfToken: conf.hf_token || prev.hfToken,
+                  name: conf.display_name || prev.name,
+                };
+                saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
+                return newUser;
+              });
+            } catch (configErr) {
+              console.error("Config restore failed", configErr);
+              setUser(prev => ({
+                ...prev,
+                isDriveConnected: true,
+                driveAccessToken: tokens.access_token,
+                driveRefreshToken: tokens.refresh_token || '',
+              }));
+            }
             
             showToast("Google Drive authorized successfully!", "success");
             if (popup) popup.close();
@@ -397,12 +416,31 @@ export default function App() {
           authChannel.close();
           try {
             const tokens = await exchangeGoogleAuthCode(authCode);
-            setUser(prev => ({
-              ...prev,
-              isDriveConnected: true,
-              driveAccessToken: tokens.access_token,
-              driveRefreshToken: tokens.refresh_token || '',
-            }));
+            
+            try {
+              const configRes = await getUserConfig(tokens.access_token, tokens.refresh_token);
+              setUser(prev => {
+                const conf = (configRes.status === 'success' && configRes.config) ? configRes.config : {};
+                const newUser = {
+                  ...prev,
+                  isDriveConnected: true,
+                  driveAccessToken: tokens.access_token,
+                  driveRefreshToken: tokens.refresh_token || '',
+                  hfToken: conf.hf_token || prev.hfToken,
+                  name: conf.display_name || prev.name,
+                };
+                saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
+                return newUser;
+              });
+            } catch (configErr) {
+              console.error("Config restore failed", configErr);
+              setUser(prev => ({
+                ...prev,
+                isDriveConnected: true,
+                driveAccessToken: tokens.access_token,
+                driveRefreshToken: tokens.refresh_token || '',
+              }));
+            }
             showToast("Google Drive authorized successfully!", "success");
             if (popup) popup.close();
             // Auto-restore vault after connecting (BroadcastChannel path)
@@ -433,11 +471,23 @@ export default function App() {
   };
 
   const handleOnboardingComplete = (userData) => {
-    setUser(prev => ({ ...prev, ...userData }));
+    setUser(prev => {
+      const newUser = { ...prev, ...userData };
+      if (newUser.isDriveConnected && newUser.driveAccessToken) {
+        saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
+      }
+      return newUser;
+    });
   };
 
   const handleUpdateUser = (updatedData) => {
-    setUser((prev) => ({ ...prev, ...updatedData }));
+    setUser(prev => {
+      const newUser = { ...prev, ...updatedData };
+      if (newUser.isDriveConnected && newUser.driveAccessToken) {
+        saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
+      }
+      return newUser;
+    });
   };
 
   const handleClearVault = () => {
