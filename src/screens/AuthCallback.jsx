@@ -8,9 +8,9 @@ export default function AuthCallback() {
 
     if (code) {
       // Send the code back to the opener (main App window)
-      window.opener.postMessage({ type: 'GOOGLE_AUTH_CODE', code }, window.location.origin);
+      window.opener?.postMessage({ type: 'GOOGLE_AUTH_SUCCESS', code }, window.location.origin);
     } else if (error) {
-      window.opener.postMessage({ type: 'GOOGLE_AUTH_ERROR', error }, window.location.origin);
+      window.opener?.postMessage({ type: 'GOOGLE_AUTH_ERROR', error }, window.location.origin);
     }
 
     // Close the popup window automatically after a brief delay to ensure message transmission

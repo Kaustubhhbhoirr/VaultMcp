@@ -324,12 +324,11 @@ export default function App() {
       const authUrl = await getGoogleAuthUrl();
       const popup = window.open(authUrl, 'google-oauth', 'width=500,height=600');
 
-      const handleAuthMessage = async (event) => {
+      window.addEventListener('message', async (event) => {
         if (event.origin !== window.location.origin) return;
 
-        if (event.data && event.data.type === 'GOOGLE_AUTH_CODE') {
+        if (event.data && event.data.type === 'GOOGLE_AUTH_SUCCESS') {
           const authCode = event.data.code;
-          window.removeEventListener('message', handleAuthMessage);
 
           try {
             const tokens = await exchangeGoogleAuthCode(authCode);
@@ -341,6 +340,7 @@ export default function App() {
             }));
             
             showToast("Google Drive authorized successfully!", "success");
+            if (popup) popup.close();
           } catch (err) {
             console.error('[VaultMCP] Drive auth token exchange failed:', err);
             setMessages(prev => [...prev, {
@@ -350,24 +350,14 @@ export default function App() {
             }]);
           }
         } else if (event.data && event.data.type === 'GOOGLE_AUTH_ERROR') {
-          window.removeEventListener('message', handleAuthMessage);
           setMessages(prev => [...prev, {
             sender: 'system',
             isError: true,
             text: `● ERROR — Google Auth rejected: ${event.data.error}`,
           }]);
+          if (popup) popup.close();
         }
-      };
-
-      window.addEventListener('message', handleAuthMessage);
-
-      // Remove listener if popup closed manually
-      const checkClosed = setInterval(() => {
-        if (popup && popup.closed) {
-          clearInterval(checkClosed);
-          window.removeEventListener('message', handleAuthMessage);
-        }
-      }, 1000);
+      }, { once: true });
 
     } catch (err) {
       console.error('[VaultMCP] Drive auth error:', err.message);

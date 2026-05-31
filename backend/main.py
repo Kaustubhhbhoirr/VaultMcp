@@ -76,6 +76,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+
+@app.middleware("http")
+async def add_coop_header(request, call_next):
+    response = await call_next(request)
+    response.headers["Cross-Origin-Opener-Policy"] = "unsafe-none"
+    return response
+
 
 # ─── Request / Response Models ───────────────────────────────────────────────
 
