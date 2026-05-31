@@ -113,6 +113,12 @@ class DriveAuthRequest(BaseModel):
     auth_code: str
 
 
+class DriveTokenRequest(BaseModel):
+    """Body containing just tokens."""
+    access_token: str
+    refresh_token: Optional[str] = None
+
+
 class DriveSaveRequest(BaseModel):
     """Body for POST /drive/save."""
     md_entry: str                          # Pre-generated MD string from /process
