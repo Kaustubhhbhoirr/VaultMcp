@@ -151,8 +151,7 @@ export default function App() {
       if (user.isDriveConnected && user.driveAccessToken && result.md_entry) {
         try {
           await saveToDrive(result.md_entry, user.driveAccessToken, user.driveRefreshToken);
-        } catch (driveErr) {
-          console.error('[VaultMCP] Drive save failed:', driveErr.message);
+        } catch {
           // Non-blocking: entry is saved locally even if Drive fails
         }
       }
@@ -240,8 +239,8 @@ export default function App() {
       if (user.isDriveConnected && user.driveAccessToken && result.md_entry) {
         try {
           await saveToDrive(result.md_entry, user.driveAccessToken, user.driveRefreshToken);
-        } catch (driveErr) {
-          console.error('[VaultMCP] Drive save failed:', driveErr.message);
+        } catch {
+          // Non-blocking
         }
       }
 
@@ -307,8 +306,8 @@ export default function App() {
         const items = parseVaultMd(response.content);
         setVaultItems(items);
       }
-    } catch (err) {
-      console.error('[VaultMCP] Failed to fetch vault from Drive:', err.message);
+    } catch {
+      // Silently fail — vault was fetched from cache
     }
   }, [user.driveAccessToken, user.driveRefreshToken, setVaultItems]);
 
@@ -342,7 +341,6 @@ export default function App() {
             showToast("Google Drive authorized successfully!", "success");
             if (popup) popup.close();
           } catch (err) {
-            console.error('[VaultMCP] Drive auth token exchange failed:', err);
             setMessages(prev => [...prev, {
               sender: 'system',
               isError: true,
@@ -376,7 +374,6 @@ export default function App() {
             showToast("Google Drive authorized successfully!", "success");
             if (popup) popup.close();
           } catch (err) {
-            console.error('[VaultMCP] Drive auth token exchange failed via channel:', err);
             setMessages(prev => [...prev, { sender: 'system', isError: true, text: `● ERROR — Token exchange failed: ${err.message}` }]);
           }
         } else if (event.data && event.data.type === 'GOOGLE_AUTH_ERROR') {
@@ -387,7 +384,6 @@ export default function App() {
       };
 
     } catch (err) {
-      console.error('[VaultMCP] Drive auth error:', err.message);
       setMessages(prev => [...prev, {
         sender: 'system',
         isError: true,

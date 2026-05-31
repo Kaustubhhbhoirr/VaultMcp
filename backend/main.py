@@ -39,7 +39,9 @@ from ai_processor import (
     ProcessingError,
     InvalidTokenError as AIInvalidTokenError,
 )
-from web_searcher import get_official_info
+def get_official_info(official_link: str) -> dict:
+    """Return the official link extracted by the AI processor."""
+    return {"official_link": official_link or "", "provider": "mistral"}
 from md_generator import (
     build_entry,
     generate_entry_md,

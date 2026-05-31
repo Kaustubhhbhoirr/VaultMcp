@@ -7,10 +7,18 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-ssr/
+dev-dist/
+
+# Local env files
+.env
+.env.*
+backend/.env
 
 # Editor directories and files
 .vscode/*
@@ -23,14 +31,12 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment files
-.env
-.env.*
-backend/.env
-
-# Python compilation artifacts
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
-# Snippets
+# Debug artifacts
 backend/player_response_snippet.txt
+error_log.md
