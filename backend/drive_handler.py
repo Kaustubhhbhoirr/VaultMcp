@@ -245,6 +245,53 @@ def save_to_drive(
         )
 
 
+def save_file_to_drive(
+    filename: str,
+    content_bytes: bytes,
+    mime_type: str,
+    access_token: str,
+    refresh_token: str = None
+) -> str:
+    """
+    Uploads a file to the VaultMCP folder and makes it accessible via a shareable link.
+    Returns the webViewLink (shareable link).
+    """
+    service = _build_drive_service(access_token, refresh_token)
+    folder_id = _find_or_create_folder(service)
+
+    try:
+        # 1. Upload file
+        file_metadata = {
+            "name": filename,
+            "parents": [folder_id],
+        }
+        media = MediaIoBaseUpload(
+            io.BytesIO(content_bytes),
+            mimetype=mime_type,
+            resumable=True,
+        )
+
+        uploaded_file = service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id, webViewLink",
+        ).execute()
+
+        file_id = uploaded_file.get("id")
+
+        # 2. Make it shareable (anyone with link can read)
+        service.permissions().create(
+            fileId=file_id,
+            body={"type": "anyone", "role": "reader"},
+        ).execute()
+
+        logger.info(f"Uploaded file {filename} to VaultMCP drive. ID: {file_id}")
+        return uploaded_file.get("webViewLink", "")
+    except Exception as e:
+        logger.error(f"Failed to upload file to drive: {e}")
+        raise DriveError(f"Failed to upload file to Drive: {e}")
+
+
 def get_vault(access_token: str, refresh_token: str = None) -> Optional[str]:
     """
     Fetch and return the full vault.md content from the user's Google Drive.

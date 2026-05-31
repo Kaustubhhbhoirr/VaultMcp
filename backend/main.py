@@ -55,9 +55,17 @@ from drive_handler import (
     get_vault as drive_get_vault,
     save_user_config as drive_save_user_config,
     get_user_config as drive_get_user_config,
+    save_file_to_drive as drive_save_file_to_drive,
     DriveAuthError,
     DriveError,
 )
+
+import fitz
+import docx
+import openpyxl
+import pptx
+import io
+
 
 
 # ─── Load Environment ────────────────────────────────────────────────────────
@@ -499,10 +507,46 @@ async def process_content(request: ProcessRequest):
     }
 
 
+def extract_text_from_file(raw_bytes: bytes, filename: str) -> str:
+    """Extract text content from various file formats."""
+    ext = filename.lower().split('.')[-1] if '.' in filename else ''
+    
+    try:
+        if ext == 'pdf':
+            doc = fitz.open(stream=raw_bytes, filetype="pdf")
+            return "\n".join([page.get_text() for page in doc])
+        elif ext == 'docx':
+            doc = docx.Document(io.BytesIO(raw_bytes))
+            return "\n".join([p.text for p in doc.paragraphs])
+        elif ext == 'xlsx':
+            wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), data_only=True)
+            lines = []
+            for sheet in wb.worksheets:
+                for row in sheet.iter_rows(values_only=True):
+                    lines.append("\t".join([str(v) if v is not None else "" for v in row]))
+            return "\n".join(lines)
+        elif ext == 'pptx':
+            prs = pptx.Presentation(io.BytesIO(raw_bytes))
+            lines = []
+            for slide in prs.slides:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text"):
+                        lines.append(shape.text)
+            return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"Failed to parse {ext} file: {e}")
+        pass
+
+    # Fallback
+    return raw_bytes.decode("utf-8", errors="replace")
+
+
 @app.post("/process/file")
 async def process_file(
     file: UploadFile = File(...),
     hf_token: str = Form(...),
+    drive_access_token: Optional[str] = Form(None),
+    drive_refresh_token: Optional[str] = Form(None),
 ):
     """
     Process an uploaded file (PDF, text, etc.).
@@ -513,12 +557,25 @@ async def process_file(
 
     try:
         raw_bytes = await file.read()
-        text_content = raw_bytes.decode("utf-8", errors="replace")
+        text_content = extract_text_from_file(raw_bytes, file.filename)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Could not read file: {e}")
 
     if not text_content.strip():
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    file_link = ""
+    if drive_access_token:
+        try:
+            file_link = drive_save_file_to_drive(
+                filename=file.filename,
+                content_bytes=raw_bytes,
+                mime_type=file.content_type or "application/octet-stream",
+                access_token=drive_access_token,
+                refresh_token=drive_refresh_token
+            )
+        except Exception as e:
+            logger.warning(f"Failed to save {file.filename} to Drive: {e}")
 
     # Prepend filename for context
     text_for_ai = f"File: {file.filename}\n\n{text_content[:8000]}"
@@ -539,6 +596,7 @@ async def process_file(
         processed=processed_dict,
         source_url="",
         official_link=official_link,
+        file_link=file_link,
     )
     md_entry = generate_entry_md(entry)
 

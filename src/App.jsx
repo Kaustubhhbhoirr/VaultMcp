@@ -201,7 +201,12 @@ export default function App() {
       // Step 2: call the real backend processFile API
       setMessages(prev => prev.map(m => m.id === msgId ? { ...m, step: 2 } : m));
 
-      const response = await processFile(file, hfToken);
+      const response = await processFile(
+        file, 
+        hfToken, 
+        user.isDriveConnected ? user.driveAccessToken : null, 
+        user.isDriveConnected ? user.driveRefreshToken : null
+      );
       const result = response.result;
 
       // Step 3: show success with real data
