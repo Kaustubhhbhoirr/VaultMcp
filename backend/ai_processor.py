@@ -87,7 +87,20 @@ def _build_prompt(text: str) -> str:
     if len(text) > MAX_INPUT_CHARS:
         trimmed += "\n[...content truncated...]"
 
-    prompt = f"""
+    if "User's note:" in text:
+        prompt = f"""A user bookmarked a website with their personal observation.
+
+{trimmed}
+
+Return ONLY this JSON, no extra text, no backticks:
+{{"title": "short name of the website or brand",
+"category": "UI Design / AI Tools / Frameworks / APIs & Libraries / Prompts / Tips & Tricks / Other",
+"summary": "Write 2-3 sentences from the USER'S PERSPECTIVE based on their note. What did THEY observe or like about it? Use phrases like 'This site features...', 'Notable for its...', 'User saved this for its...'",
+"official_link": "the URL from the content",
+"tools_mentioned": [],
+"links_mentioned": []}}"""
+    else:
+        prompt = f"""
 You are a knowledge vault assistant. Analyze the following content and extract structured information.
 
 Content: {trimmed}
@@ -96,7 +109,7 @@ Return ONLY a JSON object with NO extra text, NO markdown, NO backticks:
 {{
   "title": "clear descriptive name of the tool, concept, or resource (NOT a URL)",
   "category": "one of: AI Tools / Prompts / APIs & Libraries / Frameworks / UI Design / Tips & Tricks / Other",
-  "summary": "2-3 sentence explanation of what this is, what it does, and why it is useful. Must be informative, not a copy of the title.",
+  "summary": "REQUIRED. Minimum 2-3 sentences explaining: (1) what this tool/concept is, (2) what problem it solves, (3) who should use it. Never leave empty. Never copy the title.",
   "official_link": "the most likely official URL for this tool or resource",
   "tools_mentioned": ["list", "of", "tools"],
   "links_mentioned": ["list", "of", "urls"]
@@ -150,7 +163,7 @@ def process_text(text: str, hf_token: str) -> ProcessedContent:
             "messages": [
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 500,
+            "max_tokens": 1024,
             "temperature": 0.1,
         }
 
