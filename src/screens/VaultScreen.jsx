@@ -201,10 +201,25 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry }) {
                       >
                         [ VIEW MD ]
                       </button>
-                      <button onClick={() => handleDeleteEntry(item.id)}
-                        style={{ background: '#1a1a1a', color: 'red', border: '2px solid red', 
-                                 padding: '4px 12px', fontFamily: 'Courier New', fontSize: 11,
-                                 cursor: 'pointer', marginTop: 8 }}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm('Delete this entry?')) {
+                            handleDeleteEntry(item.id);
+                          }
+                        }}
+                        className="delete-btn"
+                        style={{
+                          marginTop: '8px',
+                          background: '#1a1a1a',
+                          color: 'red',
+                          border: '2px solid red',
+                          padding: '4px 14px',
+                          fontFamily: 'Courier New',
+                          fontSize: '11px',
+                          cursor: 'pointer',
+                          width: '100%'
+                        }}>
                         [ DELETE ENTRY ]
                       </button>
                     </div>
