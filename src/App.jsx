@@ -305,11 +305,39 @@ export default function App() {
         // Parse vault.md content into structured items
         const items = parseVaultMd(response.content);
         setVaultItems(items);
+        return items.length;
       }
     } catch {
       // Silently fail — vault was fetched from cache
     }
+    return 0;
   }, [user.driveAccessToken, user.driveRefreshToken, setVaultItems]);
+
+  // ─── Auto-sync vault on app load when Drive already connected ──────────
+  useEffect(() => {
+    if (user.isDriveConnected && user.driveAccessToken) {
+      fetchVaultFromDrive();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user.isDriveConnected]);
+
+  // ─── Manual sync from Drive (Settings button) ─────────────────────────
+  const handleSyncFromDrive = useCallback(async () => {
+    if (!user.driveAccessToken) {
+      setMessages(prev => [...prev, {
+        sender: 'system',
+        isError: true,
+        text: '● ERROR — Google Drive not connected. Connect Drive first.',
+      }]);
+      return;
+    }
+    try {
+      const count = await fetchVaultFromDrive();
+      showToast(`Vault synced — ${count} entries restored from Drive`, 'success');
+    } catch {
+      showToast('Sync failed. Check Drive connection.', 'error');
+    }
+  }, [fetchVaultFromDrive, user.driveAccessToken, showToast, setMessages]);
 
   useEffect(() => {
     if (activeTab === 'vault') {
@@ -340,6 +368,14 @@ export default function App() {
             
             showToast("Google Drive authorized successfully!", "success");
             if (popup) popup.close();
+            // Auto-restore vault after connecting
+            const count = await fetchVaultFromDrive();
+            if (count > 0) {
+              setMessages(prev => [...prev, {
+                sender: 'system',
+                text: `● VAULT RESTORED — ${count} entries loaded from Drive`,
+              }]);
+            }
           } catch (err) {
             setMessages(prev => [...prev, {
               sender: 'system',
@@ -373,6 +409,14 @@ export default function App() {
             }));
             showToast("Google Drive authorized successfully!", "success");
             if (popup) popup.close();
+            // Auto-restore vault after connecting (BroadcastChannel path)
+            const count = await fetchVaultFromDrive();
+            if (count > 0) {
+              setMessages(prev => [...prev, {
+                sender: 'system',
+                text: `● VAULT RESTORED — ${count} entries loaded from Drive`,
+              }]);
+            }
           } catch (err) {
             setMessages(prev => [...prev, { sender: 'system', isError: true, text: `● ERROR — Token exchange failed: ${err.message}` }]);
           }
@@ -505,6 +549,7 @@ export default function App() {
             onUpdateUser={handleUpdateUser} 
             onClearVault={handleClearVault}
             onConnectDrive={handleConnectDrive}
+            onSyncFromDrive={handleSyncFromDrive}
           />
         )}
       </div>

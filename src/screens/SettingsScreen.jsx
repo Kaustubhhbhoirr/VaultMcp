@@ -3,7 +3,7 @@ import ScrollReveal from '../components/ScrollReveal';
 import RetroModal from '../components/RetroModal';
 import { useToast } from '../components/RetroToast';
 
-export default function SettingsScreen({ user, onUpdateUser, onClearVault, onConnectDrive }) {
+export default function SettingsScreen({ user, onUpdateUser, onClearVault, onConnectDrive, onSyncFromDrive }) {
   const [displayName, setDisplayName] = useState(user.name || '');
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
   const [tempToken, setTempToken] = useState(user.hfToken || '');
@@ -86,6 +86,17 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onCon
                 {user.isDriveConnected ? 'RECONNECT' : 'CONNECT'}
               </button>
             </div>
+
+            {/* Sync from Drive */}
+            {user.isDriveConnected && (
+              <button
+                onClick={onSyncFromDrive}
+                className="w-full flex items-center justify-center gap-2 p-3 retro-border retro-outset bg-primary-container text-on-primary-container font-label-caps text-[11px] active-press cursor-pointer hover:opacity-90 transition-opacity"
+              >
+                <span className="material-symbols-outlined text-[16px]">sync</span>
+                [ SYNC FROM DRIVE ]
+              </button>
+            )}
 
             {/* Row 2: Hugging Face */}
             <div className="flex items-center justify-between p-3 retro-border retro-outset bg-surface-panel">
