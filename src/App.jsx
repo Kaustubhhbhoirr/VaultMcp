@@ -227,6 +227,7 @@ export default function App() {
         summary: result.summary,
         sourceUrl: result.source_url || result.official_link || '',
         officialLink: result.official_link || '',
+        originalLink: result.original_file_link || '',
         mdLink: result.md_file_link || '',
         mdEntry: result.md_entry,
         locked: false,
@@ -712,6 +713,7 @@ function parseVaultMd(mdContent) {
     let officialLink = '';
     let savedOn = '';
     let toolsMentioned = '';
+    let originalLink = '';
     let mdLink = '';
 
     for (const line of lines) {
@@ -727,6 +729,8 @@ function parseVaultMd(mdContent) {
         toolsMentioned = trimmed.replace('- Tools mentioned:', '').trim();
       } else if (trimmed.startsWith('- Saved on:')) {
         savedOn = trimmed.replace('- Saved on:', '').trim();
+      } else if (trimmed.startsWith('- Original File:')) {
+        originalLink = trimmed.replace('- Original File:', '').trim();
       } else if (trimmed.startsWith('- MD File:')) {
         const match = trimmed.match(/https?:\/\/\S+/);
         if (match) mdLink = match[0];
@@ -750,6 +754,7 @@ function parseVaultMd(mdContent) {
       summary,
       sourceUrl: sourceUrl || officialLink,
       officialLink,
+      originalLink,
       mdLink,
       toolsMentioned,
       locked: false,
