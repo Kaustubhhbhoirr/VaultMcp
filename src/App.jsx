@@ -157,11 +157,9 @@ export default function App() {
       }
 
     } catch (err) {
-      let errMsg = err.message;
-      if (errMsg.includes('403') || errMsg.includes('permissions') || errMsg.includes('Inference Provider')) {
-        errMsg = "HF Token needs Inference Provider permissions. Go to huggingface.co/settings/tokens → update token → enable Inference Providers";
-      } else {
-        errMsg = `Could not process. Try again. (${err.message})`;
+      let errMsg = "● Could not process this. Try again or paste as plain text";
+      if (err.message && (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network'))) {
+        errMsg = "● Connection failed. Check your internet and try again";
       }
       // Replace the processing message with an error
       setMessages(prev => prev.map(m => m.id === msgId ? {
@@ -170,7 +168,7 @@ export default function App() {
         isExtracting: false,
         isError: true,
         label: undefined,
-        text: `● ERROR — ${errMsg}`,
+        text: errMsg,
       } : m));
     }
   }, [user.hfToken, user.isDriveConnected, user.driveAccessToken, user.driveRefreshToken, setMessages, setVaultItems]);
@@ -245,11 +243,9 @@ export default function App() {
       }
 
     } catch (err) {
-      let errMsg = err.message;
-      if (errMsg.includes('403') || errMsg.includes('permissions') || errMsg.includes('Inference Provider')) {
-        errMsg = "HF Token needs Inference Provider permissions. Go to huggingface.co/settings/tokens → update token → enable Inference Providers";
-      } else {
-        errMsg = `Could not process file. Try again. (${err.message})`;
+      let errMsg = "● Could not process this. Try again or paste as plain text";
+      if (err.message && (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network'))) {
+        errMsg = "● Connection failed. Check your internet and try again";
       }
       setMessages(prev => prev.map(m => m.id === msgId ? {
         ...m,
@@ -257,7 +253,7 @@ export default function App() {
         isExtracting: false,
         isError: true,
         label: undefined,
-        text: `● ERROR — ${errMsg}`,
+        text: errMsg,
       } : m));
     }
   }, [user.hfToken, user.isDriveConnected, user.driveAccessToken, user.driveRefreshToken, setMessages, setVaultItems]);
@@ -380,14 +376,14 @@ export default function App() {
             setMessages(prev => [...prev, {
               sender: 'system',
               isError: true,
-              text: `● ERROR — Token exchange failed: ${err.message}`,
+              text: '● Drive connection expired. Go to Settings → Reconnect Drive',
             }]);
           }
         } else if (event.data && event.data.type === 'GOOGLE_AUTH_ERROR') {
           setMessages(prev => [...prev, {
             sender: 'system',
             isError: true,
-            text: `● ERROR — Google Auth rejected: ${event.data.error}`,
+            text: '● Drive connection expired. Go to Settings → Reconnect Drive',
           }]);
           if (popup) popup.close();
         }
@@ -418,11 +414,11 @@ export default function App() {
               }]);
             }
           } catch (err) {
-            setMessages(prev => [...prev, { sender: 'system', isError: true, text: `● ERROR — Token exchange failed: ${err.message}` }]);
+            setMessages(prev => [...prev, { sender: 'system', isError: true, text: '● Drive connection expired. Go to Settings → Reconnect Drive' }]);
           }
         } else if (event.data && event.data.type === 'GOOGLE_AUTH_ERROR') {
           authChannel.close();
-          setMessages(prev => [...prev, { sender: 'system', isError: true, text: `● ERROR — Google Auth rejected: ${event.data.error}` }]);
+          setMessages(prev => [...prev, { sender: 'system', isError: true, text: '● Drive connection expired. Go to Settings → Reconnect Drive' }]);
           if (popup) popup.close();
         }
       };
@@ -431,7 +427,7 @@ export default function App() {
       setMessages(prev => [...prev, {
         sender: 'system',
         isError: true,
-        text: `● ERROR — Could not connect Google Drive: ${err.message}`,
+        text: '● Drive connection expired. Go to Settings → Reconnect Drive',
       }]);
     }
   };
