@@ -619,6 +619,20 @@ def _create_file(
         raise DriveError(f"Failed to create file {name}: {e}") from e
 
 
+def get_file_content(
+    file_id: str,
+    access_token: str,
+    refresh_token: str = None
+) -> str:
+    """Download the textual content of a file from Drive by its file ID."""
+    creds = _build_credentials(access_token, refresh_token)
+    service = _get_drive_service(creds)
+    try:
+        return _download_file_content(service, file_id)
+    except Exception as e:
+        raise DriveError(f"Failed to download file {file_id}: {e}")
+
+
 # ─── CLI Test ────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":

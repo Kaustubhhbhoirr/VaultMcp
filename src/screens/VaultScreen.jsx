@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import ScrollReveal from '../components/ScrollReveal';
 import RetroModal from '../components/RetroModal';
 
-export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry }) {
+export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry, user }) {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [expandedIds, setExpandedIds] = useState(new Set([1])); // default expand the first entry
   const [viewingItem, setViewingItem] = useState(null);
+  const [mdContent, setMdContent] = useState('');
+  const [loadingMd, setLoadingMd] = useState(false);
 
   const categories = ["All", "AI Tools", "Dev Tools", "Prompts", "Design", "Resources", "Other"];
 
@@ -21,6 +23,29 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry }) {
       next.add(id);
     }
     setExpandedIds(next);
+  };
+
+  const handleViewMd = async (item) => {
+    setViewingItem(item);
+    if (item.mdLink) {
+      setLoadingMd(true);
+      setMdContent('Loading content from Google Drive...');
+      try {
+        const match = item.mdLink.match(/\/d\/(.*?)\/view/);
+        const fileId = match ? match[1] : null;
+        if (!fileId) throw new Error("Invalid Drive link");
+
+        const { fetchDriveFile } = await import('../utils/api.js');
+        const content = await fetchDriveFile(fileId, user?.driveAccessToken, user?.driveRefreshToken);
+        setMdContent(content);
+      } catch (err) {
+        setMdContent(`Failed to load markdown: ${err.message}`);
+      } finally {
+        setLoadingMd(false);
+      }
+    } else {
+      setMdContent(item.mdEntry || item.summary || item.text || 'No content.');
+    }
   };
 
   const buildMdContent = (items) => {
@@ -195,12 +220,22 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry }) {
                           SRC: <a className="underline text-tertiary" href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceUrl}</a>
                         </div>
                       )}
-                      <button 
-                        onClick={() => setViewingItem(item)}
-                        className="w-full py-3 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press cursor-pointer"
-                      >
-                        [ VIEW MD ]
-                      </button>
+                      {item.mdLink && (
+                        <button 
+                          onClick={() => handleViewMd(item)}
+                          className="w-full py-3 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press cursor-pointer"
+                        >
+                          [ VIEW MD ]
+                        </button>
+                      )}
+                      {!item.mdLink && (
+                        <button 
+                          onClick={() => handleViewMd(item)}
+                          className="w-full py-3 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press cursor-pointer opacity-50"
+                        >
+                          [ VIEW INFO ]
+                        </button>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -262,7 +297,7 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry }) {
       >
         <div className="space-y-4 font-mono-code text-mono-code text-[12px]">
           <div className="bg-white retro-border p-3 font-mono-code text-[12px] whitespace-pre-wrap retro-inset-medium max-h-[50vh] overflow-y-auto custom-scrollbar select-text">
-            {viewingItem?.mdEntry || viewingItem?.summary || viewingItem?.text || 'No content.'}
+            {mdContent}
           </div>
           <div className="flex justify-end pt-2 select-none">
             <button

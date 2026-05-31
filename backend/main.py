@@ -56,6 +56,7 @@ from drive_handler import (
     save_user_config as drive_save_user_config,
     get_user_config as drive_get_user_config,
     save_file_to_drive as drive_save_file_to_drive,
+    get_file_content as drive_get_file_content,
     DriveAuthError,
     DriveError,
 )
@@ -596,12 +597,23 @@ async def process_file(
     if not text_content.strip():
         raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
-    file_link = ""
+    original_file_link = ""
+    md_file_link = ""
     if drive_access_token:
         try:
+            # Upload Original
+            original_file_link = drive_save_file_to_drive(
+                filename=file.filename,
+                content_bytes=raw_bytes,
+                mime_type=file.content_type or "application/octet-stream",
+                access_token=drive_access_token,
+                refresh_token=drive_refresh_token
+            )
+            
+            # Upload MD version
             md_filename = f"{file.filename}.md"
             md_bytes = text_content.encode("utf-8")
-            file_link = drive_save_file_to_drive(
+            md_file_link = drive_save_file_to_drive(
                 filename=md_filename,
                 content_bytes=md_bytes,
                 mime_type="text/markdown",
@@ -609,7 +621,7 @@ async def process_file(
                 refresh_token=drive_refresh_token
             )
         except Exception as e:
-            logger.warning(f"Failed to save {file.filename} to Drive: {e}")
+            logger.warning(f"Failed to save files to Drive: {e}")
 
     # Prepend filename for context
     text_for_ai = f"File: {file.filename}\n\n{text_content[:8000]}"
@@ -630,7 +642,8 @@ async def process_file(
         processed=processed_dict,
         source_url="",
         official_link=official_link,
-        file_link=file_link,
+        original_file_link=original_file_link,
+        md_file_link=md_file_link,
     )
     md_entry = generate_entry_md(entry)
 
@@ -649,10 +662,35 @@ async def process_file(
         },
         "input_type": "file",
         "filename": file.filename,
+        "original_file_link": original_file_link,
+        "md_file_link": md_file_link,
     }
 
 
 # ─── Drive Routes ────────────────────────────────────────────────────────────
+
+@app.get("/drive/fetch")
+async def drive_fetch(
+    file_id: str,
+    access_token: str,
+    refresh_token: Optional[str] = None
+):
+    """Fetch raw text/markdown content of a file from Google Drive by its file ID."""
+    if not file_id:
+        raise HTTPException(status_code=400, detail="file_id is required.")
+    if not access_token:
+        raise HTTPException(status_code=400, detail="access_token is required.")
+
+    try:
+        content = drive_get_file_content(file_id, access_token, refresh_token)
+        return Response(content=content, media_type="text/markdown")
+    except DriveError as e:
+        logger.error(f"Drive fetch failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Unexpected error in /drive/fetch")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 
 @app.post("/drive/save")
 async def drive_save(request: DriveSaveRequest):

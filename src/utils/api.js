@@ -217,3 +217,26 @@ export async function getUserConfig(accessToken, refreshToken = null) {
 
   return res.json();
 }
+
+/**
+ * GET /drive/fetch — Fetch raw file content from Google Drive by ID.
+ */
+export async function fetchDriveFile(fileId, accessToken, refreshToken = null) {
+  const url = new URL(`${API_BASE}/drive/fetch`);
+  url.searchParams.append('file_id', fileId);
+  url.searchParams.append('access_token', accessToken);
+  if (refreshToken) {
+    url.searchParams.append('refresh_token', refreshToken);
+  }
+
+  const res = await fetch(url.toString(), {
+    method: 'GET'
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `Drive fetch error: ${res.status}`);
+  }
+
+  return res.text();
+}

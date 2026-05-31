@@ -227,6 +227,8 @@ export default function App() {
         summary: result.summary,
         sourceUrl: result.source_url || result.official_link || '',
         officialLink: result.official_link || '',
+        originalLink: result.original_file_link || '',
+        mdLink: result.md_file_link || '',
         mdEntry: result.md_entry,
         locked: false,
       };
@@ -594,6 +596,7 @@ export default function App() {
                 saveToDrive(newMdContent, user.driveAccessToken, user.driveRefreshToken, true).catch(console.error);
               }
             }}
+            user={user}
           />
         )}
         {activeTab === 'settings' && (
@@ -703,6 +706,8 @@ function parseVaultMd(mdContent) {
     let officialLink = '';
     let savedOn = '';
     let toolsMentioned = '';
+    let originalLink = '';
+    let mdLink = '';
 
     for (const line of lines) {
       const trimmed = line.trim();
@@ -717,6 +722,12 @@ function parseVaultMd(mdContent) {
         toolsMentioned = trimmed.replace('- Tools mentioned:', '').trim();
       } else if (trimmed.startsWith('- Saved on:')) {
         savedOn = trimmed.replace('- Saved on:', '').trim();
+      } else if (trimmed.startsWith('- Original File:')) {
+        const match = trimmed.match(/\[.*?\]\((.*?)\)/);
+        if (match) originalLink = match[1];
+      } else if (trimmed.startsWith('- MD Version:')) {
+        const match = trimmed.match(/\[.*?\]\((.*?)\)/);
+        if (match) mdLink = match[1];
       }
     }
 
@@ -737,6 +748,8 @@ function parseVaultMd(mdContent) {
       summary,
       sourceUrl: sourceUrl || officialLink,
       officialLink,
+      originalLink,
+      mdLink,
       toolsMentioned,
       locked: false,
     });
