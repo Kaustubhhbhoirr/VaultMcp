@@ -45,7 +45,7 @@ export async function processContent(content, hfToken) {
  * @param {string|null} refreshToken - Google Drive OAuth refresh token
  * @returns {Promise<object>}
  */
-export async function saveToDrive(mdEntry, accessToken, refreshToken = null) {
+export async function saveToDrive(mdEntry, accessToken, refreshToken = null, overwrite = false) {
   const res = await fetch(`${API_BASE}/drive/save`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -53,6 +53,7 @@ export async function saveToDrive(mdEntry, accessToken, refreshToken = null) {
       md_entry: mdEntry,
       access_token: accessToken,
       refresh_token: refreshToken,
+      overwrite: overwrite,
     }),
   });
 

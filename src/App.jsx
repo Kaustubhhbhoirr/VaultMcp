@@ -521,16 +521,13 @@ export default function App() {
   };
 
   const handleClearVault = () => {
-    setUser({
-      name: '',
-      hfToken: '',
-      isDriveConnected: false,
-      driveAccessToken: '',
-      driveRefreshToken: '',
-    });
+    // Only clear vault entries
     setVaultItems([]);
-    setMessages(INITIAL_MESSAGES);
-    setActiveTab('chat');
+    // Save empty vault to Drive
+    if (user.isDriveConnected && user.driveAccessToken) {
+      const header = "# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n\n---\n\n";
+      saveToDrive(header, user.driveAccessToken, user.driveRefreshToken, true).catch(console.error);
+    }
   };
 
 
@@ -616,7 +613,16 @@ export default function App() {
           />
         )}
         {activeTab === 'vault' && (
-          <VaultScreen vaultItems={vaultItems} onRefresh={fetchVaultFromDrive} />
+          <VaultScreen 
+            vaultItems={vaultItems} 
+            onRefresh={fetchVaultFromDrive} 
+            onDeleteEntry={(id, newMdContent) => {
+              setVaultItems(prev => prev.filter(item => item.id !== id));
+              if (user.isDriveConnected && user.driveAccessToken) {
+                saveToDrive(newMdContent, user.driveAccessToken, user.driveRefreshToken, true).catch(console.error);
+              }
+            }}
+          />
         )}
         {activeTab === 'settings' && (
           <SettingsScreen 

@@ -108,6 +108,7 @@ class DriveSaveRequest(BaseModel):
     md_entry: str                          # Pre-generated MD string from /process
     access_token: str                      # User's Google Drive OAuth token
     refresh_token: Optional[str] = None
+    overwrite: Optional[bool] = False
 
 
 class DriveVaultRequest(BaseModel):
@@ -574,6 +575,7 @@ async def drive_save(request: DriveSaveRequest):
             md_entry=request.md_entry,
             access_token=request.access_token,
             refresh_token=request.refresh_token,
+            overwrite=request.overwrite,
         )
 
         return {

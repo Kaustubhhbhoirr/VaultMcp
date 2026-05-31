@@ -165,9 +165,14 @@ def auth_google(auth_code: str) -> AuthTokens:
 
 # ─── Drive Operations ───────────────────────────────────────────────────────
 
-def save_to_drive(md_entry: str, access_token: str, refresh_token: str = None) -> SaveResult:
+def save_to_drive(
+    md_entry: str,
+    access_token: str,
+    refresh_token: str = None,
+    overwrite: bool = False
+) -> SaveResult:
     """
-    Append a new Markdown entry to vault.md in the user's Google Drive.
+    Saves or appends md_entry to vault.md in VaultMCP folder on Google Drive.
 
     If the VaultMCP folder doesn't exist, it is created.
     If vault.md doesn't exist, it is created with the standard header.
@@ -194,18 +199,22 @@ def save_to_drive(md_entry: str, access_token: str, refresh_token: str = None) -
     file_id = _find_file_in_folder(service, VAULT_FILENAME, folder_id)
 
     if file_id:
-        # vault.md exists — download current content, append, re-upload
-        existing_content = _download_file_content(service, file_id)
+        if overwrite:
+            # Overwrite entirely
+            updated_content = md_entry
+        else:
+            # vault.md exists — download current content, append, re-upload
+            existing_content = _download_file_content(service, file_id)
 
-        # Ensure clean separation
-        if not existing_content.endswith("\n"):
-            existing_content += "\n"
+            # Ensure clean separation
+            if not existing_content.endswith("\n"):
+                existing_content += "\n"
 
-        updated_content = existing_content + "\n" + md_entry
+            updated_content = existing_content + "\n" + md_entry
 
         _update_file_content(service, file_id, updated_content)
 
-        logger.info(f"File saved to Drive. File ID: {file_id}, Folder: VaultMCP/vault.md")
+        logger.info(f"File saved to Drive (overwrite={overwrite}). File ID: {file_id}, Folder: VaultMCP/vault.md")
 
         return SaveResult(
             file_id=file_id,

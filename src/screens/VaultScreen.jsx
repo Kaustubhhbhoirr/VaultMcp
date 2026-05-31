@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import ScrollReveal from '../components/ScrollReveal';
 import RetroModal from '../components/RetroModal';
 
-export default function VaultScreen({ vaultItems }) {
+export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry }) {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [expandedIds, setExpandedIds] = useState(new Set([1])); // default expand the first entry
   const [viewingItem, setViewingItem] = useState(null);
@@ -23,7 +23,7 @@ export default function VaultScreen({ vaultItems }) {
     setExpandedIds(next);
   };
 
-  const handleDownloadVault = () => {
+  const buildMdContent = (items) => {
     const CATEGORIES_ORDER = [
       "AI Tools",
       "Dev Tools",
@@ -50,7 +50,7 @@ export default function VaultScreen({ vaultItems }) {
       grouped[cat] = [];
     });
 
-    vaultItems.forEach(item => {
+    items.forEach(item => {
       const cat = getNormalizedCategory(item.category);
       if (!grouped[cat]) {
         grouped[cat] = [];
@@ -83,9 +83,9 @@ export default function VaultScreen({ vaultItems }) {
     });
 
     // If there were no entries grouped by CATEGORIES_ORDER, but we had items, let's group them under Other or output them anyway
-    if (!hasEntries && vaultItems.length > 0) {
+    if (!hasEntries && items.length > 0) {
       mdContent += `## [CATEGORY: Other]\n\n`;
-      vaultItems.forEach(entry => {
+      items.forEach(entry => {
         mdContent += `### ${entry.title}\n`;
         mdContent += `- Summary: ${entry.summary || ''}\n`;
         mdContent += `- Official link: ${entry.officialLink || 'N/A'}\n`;
@@ -97,6 +97,11 @@ export default function VaultScreen({ vaultItems }) {
       mdContent += `---\n\n`;
     }
 
+    return mdContent;
+  };
+
+  const handleDownloadVault = () => {
+    const mdContent = buildMdContent(vaultItems);
     const blob = new Blob([mdContent.trim() + '\n'], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -104,6 +109,13 @@ export default function VaultScreen({ vaultItems }) {
     link.download = 'vault.md';
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDeleteEntry = (id) => {
+    if (!onDeleteEntry) return;
+    const newItems = vaultItems.filter(item => item.id !== id);
+    const mdContent = buildMdContent(newItems);
+    onDeleteEntry(id, mdContent);
   };
 
   return (
@@ -188,6 +200,12 @@ export default function VaultScreen({ vaultItems }) {
                         className="w-full py-3 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press cursor-pointer"
                       >
                         [ VIEW MD ]
+                      </button>
+                      <button onClick={() => handleDeleteEntry(item.id)}
+                        style={{ background: '#1a1a1a', color: 'red', border: '2px solid red', 
+                                 padding: '4px 12px', fontFamily: 'Courier New', fontSize: 11,
+                                 cursor: 'pointer', marginTop: 8 }}>
+                        [ DELETE ENTRY ]
                       </button>
                     </div>
                   )}
