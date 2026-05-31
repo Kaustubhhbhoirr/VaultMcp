@@ -153,6 +153,36 @@ def detect_input_type(content: str) -> str:
     return "text"
 
 
+def detect_category(input_type: str, url: str, ai_category: str) -> str:
+    """Override AI category with rule-based detection."""
+    
+    # GitHub repos always = Dev Tools
+    if input_type == "github":
+        return "Dev Tools"
+    
+    # Known AI tool domains
+    ai_domains = ["openai.com", "anthropic.com", "huggingface.co", 
+                  "midjourney.com", "perplexity.ai", "claude.ai",
+                  "gemini.google.com", "cursor.sh", "replicate.com"]
+    if any(domain in url for domain in ai_domains):
+        return "AI Tools"
+    
+    # Design/UI domains
+    design_domains = ["dribbble.com", "figma.com", "behance.net", 
+                      "awwwards.com", "tailwindcss.com", "shadcn"]
+    if any(domain in url for domain in design_domains):
+        return "Design"
+    
+    # Plain text with prompt keywords = Prompts
+    prompt_keywords = ["prompt", "system prompt", "instruction", "act as", "you are a"]
+    if input_type == "text" and any(kw in url.lower() for kw in prompt_keywords):
+        return "Prompts"
+    
+    # Fall back to AI category if it's valid
+    valid = ["AI Tools", "Dev Tools", "Prompts", "Design", "Resources", "Other"]
+    return ai_category if ai_category in valid else "Resources"
+
+
 # ─── Website Scraper (lightweight) ──────────────────────────────────────────
 
 async def scrape_website(url: str) -> str:
@@ -407,6 +437,8 @@ async def process_content(request: ProcessRequest):
     # ── Step 3: AI structuring (Mistral) ───────────────────────────────
     try:
         processed = process_text(text_for_ai, hf_token)
+        final_category = detect_category(input_type, source_url, processed.category)
+        processed.category = final_category
         processed_dict = result_to_dict(processed)
         pipeline_steps.append({
             "step": 3, "name": "ai_structure", "status": "done",
