@@ -24,7 +24,7 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onCon
   const handleSaveToken = () => {
     onUpdateUser({ hfToken: tempToken });
     setIsTokenModalOpen(false);
-    showToast("Hugging Face token updated successfully!", "success");
+    showToast("● HF Token saved to Drive ✓", "success");
   };
 
   const handleClear = () => {

@@ -85,6 +85,24 @@ export default function App() {
     };
   }, []);
 
+  // ─── Save config to Drive on token change ──────────────────────────────
+  useEffect(() => {
+    if (
+      user.isDriveConnected &&
+      user.driveAccessToken &&
+      user.hfToken &&
+      user.hfToken.trim() !== ''
+    ) {
+      console.log('HF token changed — saving to Drive...');
+      saveUserConfig(
+        user.hfToken,
+        user.name,
+        user.driveAccessToken,
+        user.driveRefreshToken
+      ).catch(console.error);
+    }
+  }, [user.hfToken, user.isDriveConnected, user.driveAccessToken, user.name, user.driveRefreshToken]);
+
   // ─── Real API call: process content ───────────────────────────────────
   const handleSendMessage = useCallback(async (text) => {
     const isLink = isValidUrl(text.trim());
@@ -357,23 +375,25 @@ export default function App() {
             const tokens = await exchangeGoogleAuthCode(authCode);
             
             try {
-              const configRes = await getUserConfig(tokens.access_token, tokens.refresh_token);
-              console.log('Config load result:', configRes);
-              console.log('HF token restored:', configRes?.config?.hf_token ? 'YES' : 'NO');
-              setUser(prev => {
-                const conf = (configRes.status === 'success' && configRes.config) ? configRes.config : {};
-                const newUser = {
-                  ...prev,
-                  isDriveConnected: true,
-                  driveAccessToken: tokens.access_token,
-                  driveRefreshToken: tokens.refresh_token || '',
-                  hfToken: conf.hf_token || prev.hfToken,
-                  name: conf.display_name || prev.name,
-                };
-                console.log('Saving config to Drive:', { hfToken: newUser.hfToken, name: newUser.name });
-                saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
-                return newUser;
-              });
+              setTimeout(async () => {
+                const configRes = await getUserConfig(tokens.access_token, tokens.refresh_token);
+                console.log('Config load result:', configRes);
+                console.log('HF token restored:', configRes?.config?.hf_token ? 'YES' : 'NO');
+                setUser(prev => {
+                  const conf = (configRes.status === 'success' && configRes.config) ? configRes.config : {};
+                  const newUser = {
+                    ...prev,
+                    isDriveConnected: true,
+                    driveAccessToken: tokens.access_token,
+                    driveRefreshToken: tokens.refresh_token || '',
+                    hfToken: conf.hf_token || prev.hfToken,
+                    name: conf.display_name || prev.name,
+                  };
+                  console.log('Saving config to Drive:', { hfToken: newUser.hfToken, name: newUser.name });
+                  saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
+                  return newUser;
+                });
+              }, 2000);
             } catch (configErr) {
               console.error("Config restore failed", configErr);
               setUser(prev => ({
@@ -421,23 +441,25 @@ export default function App() {
             const tokens = await exchangeGoogleAuthCode(authCode);
             
             try {
-              const configRes = await getUserConfig(tokens.access_token, tokens.refresh_token);
-              console.log('Config load result:', configRes);
-              console.log('HF token restored:', configRes?.config?.hf_token ? 'YES' : 'NO');
-              setUser(prev => {
-                const conf = (configRes.status === 'success' && configRes.config) ? configRes.config : {};
-                const newUser = {
-                  ...prev,
-                  isDriveConnected: true,
-                  driveAccessToken: tokens.access_token,
-                  driveRefreshToken: tokens.refresh_token || '',
-                  hfToken: conf.hf_token || prev.hfToken,
-                  name: conf.display_name || prev.name,
-                };
-                console.log('Saving config to Drive:', { hfToken: newUser.hfToken, name: newUser.name });
-                saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
-                return newUser;
-              });
+              setTimeout(async () => {
+                const configRes = await getUserConfig(tokens.access_token, tokens.refresh_token);
+                console.log('Config load result:', configRes);
+                console.log('HF token restored:', configRes?.config?.hf_token ? 'YES' : 'NO');
+                setUser(prev => {
+                  const conf = (configRes.status === 'success' && configRes.config) ? configRes.config : {};
+                  const newUser = {
+                    ...prev,
+                    isDriveConnected: true,
+                    driveAccessToken: tokens.access_token,
+                    driveRefreshToken: tokens.refresh_token || '',
+                    hfToken: conf.hf_token || prev.hfToken,
+                    name: conf.display_name || prev.name,
+                  };
+                  console.log('Saving config to Drive:', { hfToken: newUser.hfToken, name: newUser.name });
+                  saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
+                  return newUser;
+                });
+              }, 2000);
             } catch (configErr) {
               console.error("Config restore failed", configErr);
               setUser(prev => ({
