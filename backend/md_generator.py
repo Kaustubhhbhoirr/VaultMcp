@@ -48,7 +48,6 @@ class VaultEntry:
     summary: str
     official_link: str = ""
     source_url: str = ""
-    original_file_link: str = ""
     md_file_link: str = ""
     tools_mentioned: List[str] = field(default_factory=list)
     links_mentioned: List[str] = field(default_factory=list)
@@ -123,11 +122,8 @@ def generate_entry_md(entry: VaultEntry) -> str:
     if entry.source_url:
         lines.append(f"- Source: {entry.source_url}")
 
-    if entry.original_file_link:
-        lines.append(f"- Original File: [View Original]({entry.original_file_link})")
-    
     if entry.md_file_link:
-        lines.append(f"- MD Version: [View MD]({entry.md_file_link})")
+        lines.append(f"- MD File: {entry.md_file_link}")
 
     # Tools mentioned (if any)
     if entry.tools_mentioned:
@@ -212,11 +208,8 @@ def generate_vault_md(entries: List[VaultEntry]) -> str:
             if entry.source_url:
                 lines.append(f"- Source: {entry.source_url}")
 
-            if entry.original_file_link:
-                lines.append(f"- Original File: [View Original]({entry.original_file_link})")
-            
             if entry.md_file_link:
-                lines.append(f"- MD Version: [View MD]({entry.md_file_link})")
+                lines.append(f"- MD File: {entry.md_file_link}")
 
             if entry.tools_mentioned:
                 tools_str = ", ".join(entry.tools_mentioned)
@@ -302,11 +295,8 @@ def _render_entry_lines(entry: VaultEntry) -> str:
     if entry.source_url:
         lines.append(f"- Source: {entry.source_url}")
 
-    if entry.original_file_link:
-        lines.append(f"- Original File: [View Original]({entry.original_file_link})")
-    
     if entry.md_file_link:
-        lines.append(f"- MD Version: [View MD]({entry.md_file_link})")
+        lines.append(f"- MD File: {entry.md_file_link}")
 
     if entry.tools_mentioned:
         tools_str = ", ".join(entry.tools_mentioned)
@@ -352,7 +342,6 @@ def build_entry(
     processed: dict,
     source_url: str = "",
     official_link: str = "",
-    original_file_link: str = "",
     md_file_link: str = "",
 ) -> VaultEntry:
     """
@@ -377,7 +366,6 @@ def build_entry(
         summary=processed.get("summary", ""),
         official_link=official_link,
         source_url=source_url,
-        original_file_link=original_file_link,
         md_file_link=md_file_link,
         tools_mentioned=processed.get("tools_mentioned", []),
         links_mentioned=processed.get("links_mentioned", []),
