@@ -131,6 +131,91 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onCon
       {/* Divider */}
       <div className="h-[2px] bg-on-surface opacity-10"></div>
 
+      {/* MCP CONNECTION Section */}
+      <ScrollReveal>
+        <section className="space-y-3">
+          <h2 className="text-on-surface-variant font-label-caps text-label-caps opacity-70 tracking-widest uppercase">MCP CONNECTION</h2>
+          <div className="space-y-4">
+            {/* MCP Server URL */}
+            <div className="flex flex-col gap-2 p-3 retro-border retro-outset bg-surface-panel">
+              <span className="font-label-caps text-[10px] text-on-surface-variant uppercase">SERVER URL</span>
+              <div className="flex gap-2">
+                <input 
+                  readOnly 
+                  value="https://kaustubh5934-vaultmcp-backend.hf.space"
+                  className="w-full bg-surface-container-lowest retro-border retro-inset px-2 py-1 font-mono-code text-[10px] focus:outline-none"
+                />
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText('https://kaustubh5934-vaultmcp-backend.hf.space');
+                    showToast('Copied!');
+                  }}
+                  className="bg-surface-variant text-on-surface retro-border px-3 py-1 font-label-caps text-[10px] retro-outset active-press cursor-pointer whitespace-nowrap"
+                >
+                  [ COPY ]
+                </button>
+              </div>
+            </div>
+
+            {/* Manifest URL */}
+            <div className="flex flex-col gap-2 p-3 retro-border retro-outset bg-surface-panel">
+              <span className="font-label-caps text-[10px] text-on-surface-variant uppercase">MANIFEST</span>
+              <div className="flex gap-2">
+                <input 
+                  readOnly 
+                  value="https://kaustubh5934-vaultmcp-backend.hf.space/.well-known/mcp.json"
+                  className="w-full bg-surface-container-lowest retro-border retro-inset px-2 py-1 font-mono-code text-[10px] focus:outline-none"
+                />
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText('https://kaustubh5934-vaultmcp-backend.hf.space/.well-known/mcp.json');
+                    showToast('Copied!');
+                  }}
+                  className="bg-surface-variant text-on-surface retro-border px-3 py-1 font-label-caps text-[10px] retro-outset active-press cursor-pointer whitespace-nowrap"
+                >
+                  [ COPY ]
+                </button>
+              </div>
+            </div>
+
+            {/* Drive Token for MCP */}
+            <div className="flex flex-col gap-2 p-3 retro-border retro-outset bg-surface-panel">
+              <span className="font-label-caps text-[10px] text-on-surface-variant uppercase">DRIVE TOKEN</span>
+              <div className="flex gap-2">
+                <input 
+                  readOnly 
+                  value={user.driveAccessToken ? '●●●●●●●●●●' : 'Not connected'}
+                  className="w-full bg-surface-container-lowest retro-border retro-inset px-2 py-1 font-mono-code text-[10px] focus:outline-none"
+                />
+                <button 
+                  onClick={() => {
+                    navigator.clipboard.writeText(user.driveAccessToken);
+                    showToast('Token copied!');
+                  }}
+                  disabled={!user.driveAccessToken}
+                  className={`bg-surface-variant text-on-surface retro-border px-3 py-1 font-label-caps text-[10px] retro-outset active-press whitespace-nowrap ${!user.driveAccessToken ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                >
+                  [ COPY ]
+                </button>
+              </div>
+            </div>
+
+            {/* How to connect instructions */}
+            <div className="bg-[#1a1a1a] text-[#f59500] p-3 text-[10px] font-mono-code leading-relaxed retro-inset">
+              <div className="font-bold mb-1">HOW TO CONNECT:</div>
+              <div>1. Copy SERVER URL above</div>
+              <div>2. In Antigravity → MCP Servers → Add New</div>
+              <div>3. Paste SERVER URL</div>
+              <div>4. Add header: X-Drive-Token = DRIVE TOKEN</div>
+              <div>5. Agent can now read your vault automatically</div>
+            </div>
+          </div>
+        </section>
+      </ScrollReveal>
+
+      {/* Divider */}
+      <div className="h-[2px] bg-on-surface opacity-10"></div>
+
       {/* DANGER ZONE Section */}
       <ScrollReveal>
         <section className="space-y-3">
