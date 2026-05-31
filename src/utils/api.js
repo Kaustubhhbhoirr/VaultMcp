@@ -132,3 +132,30 @@ export async function healthCheck() {
   if (!res.ok) throw new Error(`Health check failed: ${res.status}`);
   return res.json();
 }
+
+/**
+ * POST /process/file — Upload and process a file through the pipeline.
+ * @param {File} file - The file to upload
+ * @param {string} hfToken - User's Hugging Face token
+ * @returns {Promise<object>} Pipeline result
+ */
+export async function processFile(file, hfToken) {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('hf_token', hfToken);
+
+  const res = await fetch(`${API_BASE}/process/file`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!res.ok) {
+    if (res.status === 403) {
+      throw new Error("HF Token needs Inference Provider permissions. Go to huggingface.co/settings/tokens → update token → enable Inference Providers");
+    }
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || `API error: ${res.status}`);
+  }
+
+  return res.json();
+}

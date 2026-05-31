@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import ScrollReveal from '../components/ScrollReveal';
 
-export default function ChatScreen({ messages, onSendMessage, onSaveToVault, sharedInput, clearSharedInput }) {
+export default function ChatScreen({ messages, onSendMessage, onSendFile, sharedInput, clearSharedInput }) {
   const [inputVal, setInputVal] = useState('');
   const chatEndRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     if (sharedInput) {
@@ -22,6 +23,14 @@ export default function ChatScreen({ messages, onSendMessage, onSaveToVault, sha
     if (!inputVal.trim()) return;
     onSendMessage(inputVal);
     setInputVal('');
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file && onSendFile) {
+      onSendFile(file);
+    }
+    e.target.value = null;
   };
 
   return (
@@ -141,11 +150,14 @@ export default function ChatScreen({ messages, onSendMessage, onSaveToVault, sha
             />
           </div>
         </div>
+        <input 
+          type="file"
+          ref={fileInputRef}
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
         <button 
-          onClick={() => {
-            const fakeUrl = prompt("Enter a mock URL to attach (e.g. https://instagram.com/reel/xyz987):");
-            if (fakeUrl) setInputVal(fakeUrl);
-          }}
+          onClick={() => fileInputRef.current?.click()}
           className="bg-surface-container-lowest text-text-main retro-border retro-outset h-11 w-11 flex items-center justify-center hover:bg-surface-variant active-press shrink-0 cursor-pointer"
         >
           <span className="material-symbols-outlined" data-icon="attach_file">attach_file</span>

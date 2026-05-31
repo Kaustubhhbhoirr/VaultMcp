@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
 import ScrollReveal from '../components/ScrollReveal';
+import RetroModal from '../components/RetroModal';
+import { useToast } from '../components/RetroToast';
 
 export default function SettingsScreen({ user, onUpdateUser, onClearVault, onConnectDrive }) {
   const [displayName, setDisplayName] = useState(user.name || '');
+  const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
+  const [tempToken, setTempToken] = useState(user.hfToken || '');
+  const [isClearConfirmOpen, setIsClearConfirmOpen] = useState(false);
+  const { showToast } = useToast();
 
   const handleNameChange = (e) => {
     const val = e.target.value;
@@ -11,18 +17,24 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onCon
   };
 
   const handleUpdateToken = () => {
-    const newToken = prompt("Enter new Hugging Face token:", user.hfToken || '');
-    if (newToken !== null) {
-      onUpdateUser({ hfToken: newToken });
-      alert("Hugging Face token updated successfully!");
-    }
+    setTempToken(user.hfToken || '');
+    setIsTokenModalOpen(true);
+  };
+
+  const handleSaveToken = () => {
+    onUpdateUser({ hfToken: tempToken });
+    setIsTokenModalOpen(false);
+    showToast("Hugging Face token updated successfully!", "success");
   };
 
   const handleClear = () => {
-    if (confirm("CRITICAL WARNING: This will permanently delete all local vault indices and disconnect connected services. Continue?")) {
-      onClearVault();
-      alert("Vault purged successfully. Restarting...");
-    }
+    setIsClearConfirmOpen(true);
+  };
+
+  const handleConfirmClear = () => {
+    setIsClearConfirmOpen(false);
+    onClearVault();
+    showToast("Vault purged successfully. Restarting...", "success");
   };
 
   return (
@@ -121,6 +133,71 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onCon
         <p className="text-center text-[10px] font-mono-code text-on-surface opacity-60">VaultMCP v1.0 — MIT License</p>
         <p className="text-center text-[10px] font-mono-code text-on-surface opacity-60">Made with ☕ by developers for developers</p>
       </footer>
+      {/* Update HF Token Modal */}
+      <RetroModal
+        isOpen={isTokenModalOpen}
+        onClose={() => setIsTokenModalOpen(false)}
+        title="UPDATE HF TOKEN"
+      >
+        <div className="space-y-4 font-mono-code text-mono-code text-[12px]">
+          <label className="font-label-caps text-[10px] text-on-surface-variant uppercase">
+            HUGGING FACE TOKEN
+          </label>
+          <input
+            type="password"
+            value={tempToken}
+            onChange={(e) => setTempToken(e.target.value)}
+            placeholder="hf_••••••••••••••••"
+            className="w-full bg-white text-[#1a1a1a] border-2 border-black px-3 py-2 font-mono-code focus:outline-none"
+            style={{ boxShadow: 'inset 2px 2px 0px 0px rgba(0,0,0,1)' }}
+          />
+          <div className="flex justify-end gap-3 pt-2 select-none">
+            <button
+              onClick={() => setIsTokenModalOpen(false)}
+              className="bg-surface-variant text-on-surface border-2 border-black px-4 py-1.5 font-label-caps text-[11px] retro-outset active-press cursor-pointer"
+            >
+              CANCEL
+            </button>
+            <button
+              onClick={handleSaveToken}
+              className="bg-black text-secondary-container border-2 border-black px-4 py-1.5 font-label-caps text-[11px] retro-outset active-press cursor-pointer"
+            >
+              SAVE
+            </button>
+          </div>
+        </div>
+      </RetroModal>
+
+      {/* Critical Clear Confirm Modal */}
+      <RetroModal
+        isOpen={isClearConfirmOpen}
+        onClose={() => setIsClearConfirmOpen(false)}
+        title="CRITICAL WARNING"
+        type="danger"
+      >
+        <div className="space-y-4 font-mono-code text-mono-code text-[12px]">
+          <p className="font-bold text-[#c43030] leading-snug">
+            CRITICAL WARNING: This will permanently delete all local vault indices and disconnect connected services.
+          </p>
+          <p className="text-on-surface-variant">
+            Are you absolutely sure you want to continue?
+          </p>
+          <div className="flex justify-end gap-3 pt-2 select-none">
+            <button
+              onClick={() => setIsClearConfirmOpen(false)}
+              className="bg-surface-variant text-on-surface border-2 border-black px-4 py-1.5 font-label-caps text-[11px] retro-outset active-press cursor-pointer"
+            >
+              NO, ABORT
+            </button>
+            <button
+              onClick={handleConfirmClear}
+              className="bg-[#c43030] text-white border-2 border-black px-4 py-1.5 font-label-caps text-[11px] retro-outset active-press cursor-pointer"
+            >
+              YES, PURGE
+            </button>
+          </div>
+        </div>
+      </RetroModal>
     </main>
   );
 }

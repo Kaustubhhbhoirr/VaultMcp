@@ -7,7 +7,8 @@ import SettingsScreen from './screens/SettingsScreen';
 import StatusBar from './components/StatusBar';
 import AuthCallback from './screens/AuthCallback';
 import { isValidUrl, formatRetroDate } from './utils/helpers';
-import { processContent, saveToDrive, getVaultFromDrive, getGoogleAuthUrl, exchangeGoogleAuthCode, healthCheck } from './utils/api';
+import { processContent, saveToDrive, getVaultFromDrive, getGoogleAuthUrl, exchangeGoogleAuthCode, healthCheck, processFile } from './utils/api';
+import { useToast } from './components/RetroToast';
 
 // Initial chat history matching the designs
 const INITIAL_MESSAGES = [
@@ -45,6 +46,8 @@ export default function App() {
   if (window.location.pathname === '/auth/callback') {
     return <AuthCallback />;
   }
+
+  const { showToast } = useToast();
 
   const [user, setUser] = useLocalStorage('vaultmcp_user', {
     name: '',
@@ -173,6 +176,93 @@ export default function App() {
     }
   }, [user.hfToken, user.isDriveConnected, user.driveAccessToken, user.driveRefreshToken, setMessages, setVaultItems]);
 
+  const handleSendFile = useCallback(async (file) => {
+    const hfToken = user.hfToken;
+
+    // Add user message with attached file info
+    const userMsg = { sender: 'user', text: `[Attached File: ${file.name}]`, isUrl: false };
+    setMessages(prev => [...prev, userMsg]);
+
+    if (!hfToken) {
+      setMessages(prev => [...prev, {
+        sender: 'system',
+        isError: true,
+        text: '● ERROR — No Hugging Face token set. Go to Settings to add your token.',
+      }]);
+      return;
+    }
+
+    // Add a "processing" system message
+    const msgId = Date.now();
+    const processingMsg = {
+      id: msgId,
+      sender: 'system',
+      label: 'FILE_PROCESSOR',
+      isExtracting: true,
+      step: 1,
+      category: '',
+      title: 'Processing file...',
+      summary: '',
+    };
+    setMessages(prev => [...prev, processingMsg]);
+
+    try {
+      // Step 2: call the real backend processFile API
+      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, step: 2 } : m));
+
+      const response = await processFile(file, hfToken);
+      const result = response.result;
+
+      // Step 3: show success with real data
+      setMessages(prev => prev.map(m => m.id === msgId ? {
+        ...m,
+        step: 3,
+        title: result.title,
+        category: result.category,
+        summary: result.summary,
+      } : m));
+
+      // Add to local vault items
+      const newVaultItem = {
+        id: Date.now(),
+        title: result.title,
+        category: result.category.toUpperCase(),
+        date: result.saved_on,
+        summary: result.summary,
+        sourceUrl: result.source_url || result.official_link || '',
+        officialLink: result.official_link || '',
+        mdEntry: result.md_entry,
+        locked: false,
+      };
+      setVaultItems(prev => [newVaultItem, ...prev]);
+
+      // Auto-save to Google Drive if connected
+      if (user.isDriveConnected && user.driveAccessToken && result.md_entry) {
+        try {
+          await saveToDrive(result.md_entry, user.driveAccessToken, user.driveRefreshToken);
+        } catch (driveErr) {
+          console.error('[VaultMCP] Drive save failed:', driveErr.message);
+        }
+      }
+
+    } catch (err) {
+      let errMsg = err.message;
+      if (errMsg.includes('403') || errMsg.includes('permissions') || errMsg.includes('Inference Provider')) {
+        errMsg = "HF Token needs Inference Provider permissions. Go to huggingface.co/settings/tokens → update token → enable Inference Providers";
+      } else {
+        errMsg = `Could not process file. Try again. (${err.message})`;
+      }
+      setMessages(prev => prev.map(m => m.id === msgId ? {
+        ...m,
+        id: undefined,
+        isExtracting: false,
+        isError: true,
+        label: undefined,
+        text: `● ERROR — ${errMsg}`,
+      } : m));
+    }
+  }, [user.hfToken, user.isDriveConnected, user.driveAccessToken, user.driveRefreshToken, setMessages, setVaultItems]);
+
   // Parse share target options on load
   useEffect(() => {
     if (hasProcessedShare.current) return;
@@ -250,7 +340,7 @@ export default function App() {
               driveRefreshToken: tokens.refresh_token || '',
             }));
             
-            alert("Google Drive authorized successfully!");
+            showToast("Google Drive authorized successfully!", "success");
           } catch (err) {
             console.error('[VaultMCP] Drive auth token exchange failed:', err);
             setMessages(prev => [...prev, {
@@ -381,6 +471,7 @@ export default function App() {
           <ChatScreen 
             messages={messages} 
             onSendMessage={handleSendMessage}
+            onSendFile={handleSendFile}
             sharedInput={sharedInput}
             clearSharedInput={() => setSharedInput('')}
           />

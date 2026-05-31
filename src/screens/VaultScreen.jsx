@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import ScrollReveal from '../components/ScrollReveal';
+import RetroModal from '../components/RetroModal';
 
 export default function VaultScreen({ vaultItems }) {
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [expandedIds, setExpandedIds] = useState(new Set([1])); // default expand the first entry
+  const [viewingItem, setViewingItem] = useState(null);
 
-  const categories = ['ALL', 'AI TOOLS', 'PROMPTS', 'APIS', 'FRAMEWORKS', 'UI DESIGN', 'OTHER'];
+  const categories = ['ALL', 'AI TOOLS', 'PROMPTS', 'APIs & Libraries', 'FRAMEWORKS', 'UI DESIGN', 'OTHER'];
 
   const filteredItems = selectedCategory === 'ALL'
     ? vaultItems
-    : vaultItems.filter(item => item.category.toUpperCase() === selectedCategory);
+    : vaultItems.filter(item => item.category.toUpperCase() === selectedCategory.toUpperCase());
 
   const toggleExpand = (id) => {
     const next = new Set(expandedIds);
@@ -185,7 +187,7 @@ export default function VaultScreen({ vaultItems }) {
                         </div>
                       )}
                       <button 
-                        onClick={() => alert(`Content of:\n${item.title}\n\n${item.summary}`)}
+                        onClick={() => setViewingItem(item)}
                         className="w-full py-3 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press cursor-pointer"
                       >
                         [ VIEW MD ]
@@ -221,6 +223,27 @@ export default function VaultScreen({ vaultItems }) {
           </p>
         </div>
       </div>
+
+      {/* View MD Retro Modal */}
+      <RetroModal
+        isOpen={!!viewingItem}
+        onClose={() => setViewingItem(null)}
+        title={viewingItem?.title || 'VIEW ENTRY'}
+      >
+        <div className="space-y-4 font-mono-code text-mono-code text-[12px]">
+          <div className="bg-white retro-border p-3 font-mono-code text-[12px] whitespace-pre-wrap retro-inset-medium max-h-[50vh] overflow-y-auto custom-scrollbar select-text">
+            {viewingItem?.mdEntry || viewingItem?.summary || viewingItem?.text || 'No content.'}
+          </div>
+          <div className="flex justify-end pt-2 select-none">
+            <button
+              onClick={() => setViewingItem(null)}
+              className="bg-black text-secondary-container retro-border px-5 py-2 font-label-caps text-[11px] retro-outset active-press cursor-pointer"
+            >
+              CLOSE
+            </button>
+          </div>
+        </div>
+      </RetroModal>
     </div>
   );
 }

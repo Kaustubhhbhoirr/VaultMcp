@@ -31,3 +31,6 @@ backend/.env
 # Python compilation artifacts
 __pycache__/
 *.pyc
+
+# Snippets
+backend/player_response_snippet.txt

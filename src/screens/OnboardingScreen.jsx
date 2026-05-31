@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
 import WindowFrame from '../components/WindowFrame';
+import { useToast } from '../components/RetroToast';
 
 export default function OnboardingScreen({ onComplete, onConnectDrive, isDriveConnected }) {
   const [name, setName] = useState('');
   const [hfToken, setHfToken] = useState('');
+  const { showToast } = useToast();
 
   const handleStart = () => {
     if (!name.trim()) {
-      alert("Please enter your name to set up the profile.");
+      showToast("Please enter your name to set up the profile.", "warning");
       return;
     }
     onComplete({
