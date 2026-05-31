@@ -105,12 +105,6 @@ class DriveVaultRequest(BaseModel):
 
 # ─── URL Detection Helpers ──────────────────────────────────────────────────
 
-INSTAGRAM_RE = re.compile(
-    r"(?:https?://)?(?:www\.)?instagram\.com/(?:reel|reels|p)/[\w-]+", re.IGNORECASE
-)
-YOUTUBE_RE = re.compile(
-    r"(?:https?://)?(?:(?:www\.|m\.)?youtube\.com/(?:shorts/|watch\?v=|v/)|youtu\.be/)[\w-]+", re.IGNORECASE
-)
 GITHUB_RE = re.compile(
     r"(?:https?://)?(?:www\.)?github\.com/([\w.-]+)/([\w.-]+)", re.IGNORECASE
 )
@@ -126,14 +120,6 @@ def detect_input_type(content: str) -> str:
     """
     content = content.strip()
     logger.info(f"[detect_input_type] Evaluating content: {content}")
-
-    if INSTAGRAM_RE.match(content):
-        logger.info("[detect_input_type] Match found: instagram")
-        return "instagram"
-
-    if YOUTUBE_RE.match(content):
-        logger.info("[detect_input_type] Match found: youtube")
-        return "youtube"
 
     if GITHUB_RE.match(content):
         logger.info("[detect_input_type] Match found: github")
@@ -284,77 +270,6 @@ async def root_index():
     }
 
 
-async def get_youtube_metadata(url: str) -> str:
-    """Extract YouTube video metadata (title, author) using noembed."""
-    logger.info(f"Fetching YouTube metadata using noembed for: {url}")
-    try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            r = await client.get(f"https://noembed.com/embed?url={url}")
-            logger.info(f"YouTube noembed response status: {r.status_code}")
-            data = r.json()
-            logger.info(f"YouTube noembed payload: {data}")
-            return f"Title: {data.get('title')}\nAuthor: {data.get('author_name')}\nURL: {url}"
-    except Exception as e:
-        logger.error(f"Error fetching YouTube metadata: {e}")
-        return f"YouTube URL: {url}\n(Failed to fetch noembed metadata: {e})"
-
-
-
-async def get_instagram_metadata(url: str) -> str:
-    """Extract Instagram post metadata (og:title, og:description) using httpx."""
-    try:
-        async with httpx.AsyncClient(
-            timeout=15.0,
-            follow_redirects=True,
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
-            },
-        ) as client:
-            response = await client.get(url)
-            if response.status_code == 200:
-                html = response.text
-                
-                # Regex for og:title
-                title_match = re.search(
-                    r'<meta\s+[^>]*property=["\']og:title["\'][^>]*content=["\'](.*?)["\']',
-                    html, re.IGNORECASE
-                )
-                if not title_match:
-                    title_match = re.search(
-                        r'<meta\s+[^>]*content=["\'](.*?)["\'][^>]*property=["\']og:title["\']',
-                        html, re.IGNORECASE
-                    )
-                og_title = title_match.group(1).strip() if title_match else ""
-                
-                # Regex for og:description
-                desc_match = re.search(
-                    r'<meta\s+[^>]*property=["\']og:description["\'][^>]*content=["\'](.*?)["\']',
-                    html, re.IGNORECASE
-                )
-                if not desc_match:
-                    desc_match = re.search(
-                        r'<meta\s+[^>]*content=["\'](.*?)["\'][^>]*property=["\']og:description["\']',
-                        html, re.IGNORECASE
-                    )
-                og_desc = desc_match.group(1).strip() if desc_match else ""
-                
-                parts = []
-                if og_title:
-                    parts.append(f"Instagram Post Title: {og_title}")
-                if og_desc:
-                    parts.append(f"Caption/Description: {og_desc}")
-                
-                if parts:
-                    return "\n".join(parts)
-    except Exception as e:
-        print(f"[Instagram Metadata] httpx scrape failed: {e}", flush=True)
-    return f"Instagram URL: {url}"
-
-
 @app.get("/health")
 async def health_check():
     """System health check."""
@@ -405,37 +320,7 @@ async def process_content(request: ProcessRequest):
     text_for_ai = ""
 
     # ── Step 2: Retrieve metadata/content based on input type ────────────
-    if input_type == "youtube":
-        try:
-            metadata = await get_youtube_metadata(content)
-            text_for_ai = metadata
-            pipeline_steps.append({
-                "step": 2, "name": "youtube_metadata", "status": "done",
-                "detail": f"Retrieved YouTube metadata",
-            })
-        except Exception as e:
-            pipeline_steps.append({
-                "step": 2, "name": "youtube_metadata", "status": "error",
-                "detail": str(e),
-            })
-            raise HTTPException(status_code=422, detail=f"YouTube metadata query failed: {e}")
-
-    elif input_type == "instagram":
-        try:
-            metadata = await get_instagram_metadata(content)
-            text_for_ai = metadata
-            pipeline_steps.append({
-                "step": 2, "name": "instagram_metadata", "status": "done",
-                "detail": f"Retrieved Instagram metadata",
-            })
-        except Exception as e:
-            pipeline_steps.append({
-                "step": 2, "name": "instagram_metadata", "status": "error",
-                "detail": str(e),
-            })
-            raise HTTPException(status_code=422, detail=f"Instagram metadata query failed: {e}")
-
-    elif input_type == "github":
+    if input_type == "github":
         try:
             metadata = await get_github_metadata(content)
             text_for_ai = metadata
@@ -452,12 +337,32 @@ async def process_content(request: ProcessRequest):
 
     elif input_type == "website":
         try:
-            scraped_text = await scrape_website(content)
-            text_for_ai = scraped_text
-            pipeline_steps.append({
-                "step": 2, "name": "scrape_website", "status": "done",
-                "detail": f"Scraped {len(scraped_text)} chars",
-            })
+            url_match = re.search(r'https?://\S+', content)
+            if url_match:
+                url = url_match.group(0)
+                user_note = content.replace(url, '').strip()
+                source_url = url
+                
+                if user_note:
+                    text_for_ai = f"URL: {url}\nUser's note: {user_note}"
+                    pipeline_steps.append({
+                        "step": 2, "name": "user_note", "status": "done",
+                        "detail": "Used user's custom note instead of scraping",
+                    })
+                else:
+                    scraped_text = await scrape_website(url)
+                    text_for_ai = scraped_text
+                    pipeline_steps.append({
+                        "step": 2, "name": "scrape_website", "status": "done",
+                        "detail": f"Scraped {len(scraped_text)} chars",
+                    })
+            else:
+                scraped_text = await scrape_website(content)
+                text_for_ai = scraped_text
+                pipeline_steps.append({
+                    "step": 2, "name": "scrape_website", "status": "done",
+                    "detail": f"Scraped {len(scraped_text)} chars",
+                })
         except Exception as e:
             pipeline_steps.append({
                 "step": 2, "name": "scrape_website", "status": "error",

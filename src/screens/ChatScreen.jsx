@@ -140,7 +140,7 @@ export default function ChatScreen({ messages, onSendMessage, onSendFile, shared
           <div className="bg-surface-container-lowest retro-border retro-inset flex items-center overflow-hidden px-1 py-1">
             <input 
               className="w-full bg-transparent border-none focus:ring-0 font-body-md placeholder:text-on-surface-variant placeholder:opacity-50 text-[12px] px-2 py-2" 
-              placeholder="Paste link, prompt, or share a reel..." 
+              placeholder="Paste a link, prompt, or any text..." 
               type="text"
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}

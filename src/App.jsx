@@ -14,17 +14,17 @@ import { useToast } from './components/RetroToast';
 const INITIAL_MESSAGES = [
   {
     sender: 'user',
-    text: 'https://instagram.com/reel/abc123',
+    text: 'https://github.com/facebook/react',
     isUrl: true
   },
   {
     sender: 'system',
-    label: 'INSTAGRAM_EXTRACTOR',
+    label: 'GITHUB_EXTRACTOR',
     isExtracting: true,
     step: 3,
-    category: 'AI Tools',
-    title: 'Cursor AI',
-    summary: 'This reel discusses the new Cursor AI features for 2024 including Composer and agentic workflows.'
+    category: 'Libraries',
+    title: 'React',
+    summary: 'A declarative, efficient, and flexible JavaScript library for building user interfaces.'
   },
   {
     sender: 'user',
