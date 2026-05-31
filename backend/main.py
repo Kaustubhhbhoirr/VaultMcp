@@ -35,6 +35,7 @@ logger = logging.getLogger(__name__)
 # ─── Local Modules ───────────────────────────────────────────────────────────
 from ai_processor import (
     process_text,
+    process_mcp_compare,
     result_to_dict,
     ProcessingError,
     InvalidTokenError as AIInvalidTokenError,
@@ -138,6 +139,12 @@ class ConfigSaveRequest(BaseModel):
     refresh_token: Optional[str] = None
     hf_token: Optional[str] = ""
     display_name: Optional[str] = ""
+
+
+class MCPCompareRequest(BaseModel):
+    project_readme: str
+    drive_token: str
+    hf_token: str
 
 
 # ─── URL Detection Helpers ──────────────────────────────────────────────────
@@ -965,6 +972,70 @@ async def mcp_search_vault(
         raise HTTPException(status_code=401, detail=f"Google Drive auth error: {e}")
     except DriveError as e:
         raise HTTPException(status_code=500, detail=f"Google Drive error: {e}")
+
+
+# ─── MCP Protocol Endpoints ──────────────────────────────────────────────────
+
+@app.get("/.well-known/mcp.json")
+async def mcp_manifest():
+    return {
+        "name": "VaultMCP",
+        "version": "1.0",
+        "description": "Personal knowledge vault — tools, prompts, links saved from the web",
+        "tools": [
+            {
+                "name": "get_vault",
+                "description": "Get the full vault of saved tools, prompts, and resources",
+                "endpoint": "/mcp/vault",
+                "method": "GET"
+            },
+            {
+                "name": "search_vault",
+                "description": "Search vault for tools and resources relevant to a query",
+                "endpoint": "/mcp/search",
+                "method": "GET",
+                "parameters": {
+                    "q": "search query string"
+                }
+            },
+            {
+                "name": "compare_project",
+                "description": "Compare a project README with vault to find relevant tools",
+                "endpoint": "/mcp/compare",
+                "method": "POST"
+            }
+        ]
+    }
+
+@app.post("/mcp/compare")
+async def mcp_compare(request: MCPCompareRequest):
+    """
+    Agent sends project README content.
+    VaultMCP finds matching tools from vault automatically.
+    Returns ranked list of relevant tools.
+    """
+    project_readme = request.project_readme
+    drive_token = request.drive_token
+    
+    # Fetch full vault
+    vault_content = drive_get_vault(drive_token)
+    if not vault_content:
+        vault_content = ""
+    
+    # Use generic text inference to compare and find matches
+    prompt = f"""
+    Project README:
+    {project_readme[:2000]}
+    
+    Available tools in vault:
+    {vault_content[:3000]}
+    
+    Return JSON list of relevant tools:
+    [{{"tool": "name", "reason": "why it fits", "link": "url"}}]
+    """
+    
+    result = process_mcp_compare(prompt, request.hf_token)
+    return {"status": "success", "matches": result}
 
 
 # ─── Run with Uvicorn ────────────────────────────────────────────────────────

@@ -429,6 +429,63 @@ def result_to_dict(result: ProcessedContent) -> dict:
         "links_mentioned": result.links_mentioned,
     }
 
+def process_mcp_compare(prompt: str, hf_token: str) -> list:
+    """Send a raw prompt to the LLM and return a parsed JSON array."""
+    if not hf_token or not hf_token.strip():
+        raise InvalidTokenError("Hugging Face token is empty.")
+
+    models_to_try = [PRIMARY_MODEL, FALLBACK_MODEL]
+    last_error = None
+
+    for model in models_to_try:
+        headers = {
+            "Authorization": f"Bearer {hf_token.strip()}",
+            "Content-Type": "application/json",
+        }
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 1024,
+            "temperature": 0.1,
+        }
+
+        backoff = INITIAL_BACKOFF_SECONDS
+        model_failed = False
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+                    response = client.post(HF_INFERENCE_URL, headers=headers, json=payload)
+
+                if response.status_code == 200:
+                    try:
+                        body = response.json()
+                        content = body["choices"][0]["message"]["content"]
+                        match = re.search(r'\[.*\]', content, re.DOTALL)
+                        if match:
+                            import json
+                            return json.loads(match.group(0))
+                        return []
+                    except Exception:
+                        return []
+                        
+                elif response.status_code == 503:
+                    import time
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
+                    continue
+                else:
+                    model_failed = True
+                    break
+            except Exception:
+                model_failed = True
+                break
+        
+        if model_failed:
+            continue
+            
+    return []
+
 
 # ─── CLI Test ────────────────────────────────────────────────────────────────
 

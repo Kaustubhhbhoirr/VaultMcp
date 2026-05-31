@@ -1,9 +1,16 @@
 {
+  "schema_version": "1.0",
   "name": "VaultMCP",
-  "description": "Read and search the user's personal knowledge vault",
-  "version": "1.0",
-  "endpoints": {
-    "vault": "/mcp/vault",
-    "search": "/mcp/search"
-  }
+  "description": "Personal knowledge vault for developers",
+  "server_url": "https://kaustubh5934-vaultmcp-backend.hf.space",
+  "tools": [
+    {
+      "name": "search_vault",
+      "description": "Search saved tools and prompts"
+    },
+    {
+      "name": "compare_project",
+      "description": "Find vault tools relevant to your project README"
+    }
+  ]
 }
