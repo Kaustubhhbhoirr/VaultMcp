@@ -132,7 +132,7 @@ export default function VaultScreen({ vaultItems }) {
       </nav>
 
       {/* Main Scrollable Content */}
-      <main className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6 pb-24">
+      <main className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-6">
         {filteredItems.length === 0 ? (
           <div className="text-center py-12 border-2 border-dashed border-on-surface-variant border-opacity-30">
             <p className="font-mono-code text-on-surface-variant opacity-60">NO ENTRIES FOUND IN "{selectedCategory}"</p>
@@ -209,7 +209,7 @@ export default function VaultScreen({ vaultItems }) {
       </main>
 
       {/* Bottom Floating Bar */}
-      <div className="fixed bottom-14 left-0 w-full bg-background-base retro-border-t p-4 z-40 max-w-[375px] mx-auto left-1/2 -translate-x-1/2 select-none">
+      <div className="bg-background-base retro-border-t p-4 shrink-0 select-none">
         <button 
           onClick={handleDownloadVault}
           className="w-full py-4 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press flex items-center justify-center gap-2 cursor-pointer"
