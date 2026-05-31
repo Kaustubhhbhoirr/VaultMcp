@@ -239,19 +239,26 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry, user
                             [ VIEW MD ]
                           </button>
                           <button 
-                            onClick={() => {
-                              fetch(item.mdLink)
-                                .then(r => r.text())
-                                .then(text => {
-                                  const blob = new Blob([text], { type: 'text/markdown' });
-                                  const url = URL.createObjectURL(blob);
-                                  const a = document.createElement('a');
-                                  a.href = url;
-                                  a.download = `${item.title}.md`;
-                                  a.click();
-                                  URL.revokeObjectURL(url);
-                                })
-                                .catch(err => console.error("Download failed", err));
+                            onClick={async () => {
+                              try {
+                                const match = item.mdLink.match(/\/d\/(.*?)\/view/);
+                                const fileId = match ? match[1] : null;
+                                if (!fileId) throw new Error("Invalid Drive link");
+
+                                const { fetchDriveFile } = await import('../utils/api.js');
+                                const text = await fetchDriveFile(fileId, user?.driveAccessToken, user?.driveRefreshToken);
+
+                                const blob = new Blob([text], { type: 'text/markdown' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `${item.title}.md`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                              } catch (err) {
+                                console.error("Download failed", err);
+                                alert("Download failed: " + err.message);
+                              }
                             }}
                             className="flex-1 py-3 bg-white text-black font-headline-md retro-border retro-outset active-press cursor-pointer text-center"
                           >
