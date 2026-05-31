@@ -19,7 +19,8 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Query, Response
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Query, Response, Request
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -1036,6 +1037,16 @@ async def mcp_compare(request: MCPCompareRequest):
     
     result = process_mcp_compare(prompt, request.hf_token)
     return {"status": "success", "matches": result}
+
+
+@app.get("/mcp")
+async def mcp_sse(request: Request):
+    """MCP SSE endpoint for Antigravity connection"""
+    async def event_stream():
+        # Send MCP capabilities
+        yield f"data: {json.dumps({'type': 'capabilities', 'tools': ['get_vault', 'search_vault', 'compare_project']})}\n\n"
+    
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 # ─── Run with Uvicorn ────────────────────────────────────────────────────────

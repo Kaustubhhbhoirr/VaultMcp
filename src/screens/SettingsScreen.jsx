@@ -201,13 +201,29 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onCon
             </div>
 
             {/* How to connect instructions */}
-            <div className="bg-[#1a1a1a] text-[#f59500] p-3 text-[10px] font-mono-code leading-relaxed retro-inset">
-              <div className="font-bold mb-1">HOW TO CONNECT:</div>
-              <div>1. Copy SERVER URL above</div>
-              <div>2. In Antigravity → MCP Servers → Add New</div>
-              <div>3. Paste SERVER URL</div>
-              <div>4. Add header: X-Drive-Token = DRIVE TOKEN</div>
-              <div>5. Agent can now read your vault automatically</div>
+            <div className="bg-[#1a1a1a] text-[#f59500] p-3 text-[10px] font-mono-code leading-relaxed retro-inset flex flex-col gap-2">
+              <div>
+                <div className="font-bold mb-1">PASTE INTO mcp_config.json:</div>
+                <div>~/.gemini/antigravity/mcp_config.json</div>
+              </div>
+              <button 
+                onClick={() => {
+                  const config = JSON.stringify({
+                    mcpServers: {
+                      vaultmcp: {
+                        command: "npx",
+                        args: ["-y", "mcp-remote", "https://kaustubh5934-vaultmcp-backend.hf.space/mcp"],
+                        env: { "X-Drive-Token": user.driveAccessToken }
+                      }
+                    }
+                  }, null, 2);
+                  navigator.clipboard.writeText(config);
+                  showToast('Config copied!');
+                }}
+                className="bg-surface-variant text-on-surface retro-border px-3 py-1 font-label-caps text-[10px] retro-outset active-press cursor-pointer w-full text-center"
+              >
+                [ COPY MCP CONFIG ]
+              </button>
             </div>
           </div>
         </section>
