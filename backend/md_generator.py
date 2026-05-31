@@ -119,15 +119,15 @@ def generate_entry_md(entry: VaultEntry) -> str:
     else:
         lines.append("- Official link: N/A")
 
+    if entry.md_file_link:
+        lines.append(f"- MD File: {entry.md_file_link}")
+
     # Source URL (where the user found this content)
     if entry.source_url:
         lines.append(f"- Source: {entry.source_url}")
 
     if entry.original_file_link:
         lines.append(f"- Original File: {entry.original_file_link}")
-    
-    if entry.md_file_link:
-        lines.append(f"- MD File: {entry.md_file_link}")
 
     # Tools mentioned (if any)
     if entry.tools_mentioned:
@@ -209,14 +209,14 @@ def generate_vault_md(entries: List[VaultEntry]) -> str:
             else:
                 lines.append("- Official link: N/A")
 
+            if entry.md_file_link:
+                lines.append(f"- MD File: {entry.md_file_link}")
+
             if entry.source_url:
                 lines.append(f"- Source: {entry.source_url}")
 
             if entry.original_file_link:
                 lines.append(f"- Original File: {entry.original_file_link}")
-            
-            if entry.md_file_link:
-                lines.append(f"- MD File: {entry.md_file_link}")
 
             if entry.tools_mentioned:
                 tools_str = ", ".join(entry.tools_mentioned)
@@ -299,14 +299,14 @@ def _render_entry_lines(entry: VaultEntry) -> str:
     else:
         lines.append("- Official link: N/A")
 
+    if entry.md_file_link:
+        lines.append(f"- MD File: {entry.md_file_link}")
+
     if entry.source_url:
         lines.append(f"- Source: {entry.source_url}")
 
     if entry.original_file_link:
         lines.append(f"- Original File: {entry.original_file_link}")
-
-    if entry.md_file_link:
-        lines.append(f"- MD File: {entry.md_file_link}")
 
     if entry.tools_mentioned:
         tools_str = ", ".join(entry.tools_mentioned)

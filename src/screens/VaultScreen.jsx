@@ -231,12 +231,33 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry, user
                         </a>
                       )}
                       {item.mdLink && (
-                        <button 
-                          onClick={() => handleViewMd(item)}
-                          className="w-full py-3 mt-2 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press cursor-pointer"
-                        >
-                          [ VIEW MD ]
-                        </button>
+                        <div className="flex gap-2 mt-2">
+                          <button 
+                            onClick={() => handleViewMd(item)}
+                            className="flex-1 py-3 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press cursor-pointer text-center"
+                          >
+                            [ VIEW MD ]
+                          </button>
+                          <button 
+                            onClick={() => {
+                              fetch(item.mdLink)
+                                .then(r => r.text())
+                                .then(text => {
+                                  const blob = new Blob([text], { type: 'text/markdown' });
+                                  const url = URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = `${item.title}.md`;
+                                  a.click();
+                                  URL.revokeObjectURL(url);
+                                })
+                                .catch(err => console.error("Download failed", err));
+                            }}
+                            className="flex-1 py-3 bg-white text-black font-headline-md retro-border retro-outset active-press cursor-pointer text-center"
+                          >
+                            [ DOWNLOAD MD ]
+                          </button>
+                        </div>
                       )}
                       {!item.mdLink && (
                         <button 
