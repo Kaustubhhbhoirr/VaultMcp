@@ -86,6 +86,8 @@ class SaveResult:
 
 # ─── OAuth2 Flow ─────────────────────────────────────────────────────────────
 
+import urllib.parse
+
 def get_auth_url() -> str:
     """
     Generate the Google OAuth2 consent URL for the user to visit.
@@ -98,14 +100,19 @@ def get_auth_url() -> str:
     """
     _validate_client_credentials()
 
-    flow = _build_oauth_flow()
-    auth_url, _ = flow.authorization_url(
-        access_type="offline",
-        prompt="consent",
-        include_granted_scopes="true",
-    )
-
-    return auth_url
+    # Manually construct URL to avoid stateful PKCE generation by google-auth-oauthlib,
+    # which breaks our stateless token exchange in auth_google()
+    params = {
+        "client_id": GOOGLE_CLIENT_ID,
+        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "response_type": "code",
+        "scope": " ".join(SCOPES),
+        "access_type": "offline",
+        "prompt": "consent",
+        "include_granted_scopes": "true",
+    }
+    
+    return "https://accounts.google.com/o/oauth2/auth?" + urllib.parse.urlencode(params)
 
 
 def auth_google(auth_code: str) -> AuthTokens:
