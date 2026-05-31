@@ -3,13 +3,13 @@ import ScrollReveal from '../components/ScrollReveal';
 import RetroModal from '../components/RetroModal';
 
 export default function VaultScreen({ vaultItems }) {
-  const [selectedCategory, setSelectedCategory] = useState('ALL');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [expandedIds, setExpandedIds] = useState(new Set([1])); // default expand the first entry
   const [viewingItem, setViewingItem] = useState(null);
 
-  const categories = ['ALL', 'AI TOOLS', 'PROMPTS', 'APIs & Libraries', 'FRAMEWORKS', 'UI DESIGN', 'OTHER'];
+  const categories = ["All", "AI Tools", "Prompts", "APIs & Libraries", "Frameworks", "UI Design", "Tips & Tricks", "Other"];
 
-  const filteredItems = selectedCategory === 'ALL'
+  const filteredItems = selectedCategory === 'All'
     ? vaultItems
     : vaultItems.filter(item => item.category.toUpperCase() === selectedCategory.toUpperCase());
 
