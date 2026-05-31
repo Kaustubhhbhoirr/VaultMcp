@@ -404,21 +404,28 @@ export default function App() {
   // If user has not completed onboarding, lock them in onboarding screen
   if (!user.name) {
     return (
-      <div className="mobile-canvas bg-background-base relative">
-        <div className="scanline" />
-        <OnboardingScreen onComplete={handleOnboardingComplete} onConnectDrive={handleConnectDrive} isDriveConnected={user.isDriveConnected} />
-        <StatusBar 
-          leftLabel={isBackendOnline ? "SYSTEM INITIALIZED" : "AWAITING SYSTEM INITIALIZATION"} 
-          rightLabel={isBackendOnline ? "ONLINE" : "OFFLINE"} 
-          isOk={isBackendOnline} 
-        />
-      </div>
+      <>
+        <div className="app-window mobile-canvas bg-background-base relative">
+          <div className="scanline" />
+          <OnboardingScreen onComplete={handleOnboardingComplete} onConnectDrive={handleConnectDrive} isDriveConnected={user.isDriveConnected} />
+          <StatusBar 
+            leftLabel={isBackendOnline ? "SYSTEM INITIALIZED" : "AWAITING SYSTEM INITIALIZATION"} 
+            rightLabel={isBackendOnline ? "ONLINE" : "OFFLINE"} 
+            isOk={isBackendOnline} 
+          />
+        </div>
+        <div className="desktop-taskbar">
+          <span className="font-bold">VaultMCP System — v1.0.0</span>
+          <span className="ml-auto opacity-70">AWAITING SYSTEM INITIALIZATION</span>
+        </div>
+      </>
     );
   }
 
   return (
-    <div className="mobile-canvas bg-background-base relative border-x-2 border-black">
-      <div className="scanline" />
+    <>
+      <div className="app-window mobile-canvas bg-background-base relative border-x-2 border-black">
+        <div className="scanline" />
       
       {/* Global Header */}
       <header className="bg-primary text-on-primary font-title-bar text-title-bar uppercase border-b-2 border-black flex justify-between items-center w-full px-4 h-10 shrink-0 select-none">
@@ -546,6 +553,11 @@ export default function App() {
         </nav>
       </div>
     </div>
+    <div className="desktop-taskbar">
+      <span className="font-bold">VaultMCP System — v1.0.0</span>
+      <span className="ml-auto opacity-70">{isBackendOnline ? 'SYSTEM ONLINE' : 'SYSTEM OFFLINE'}</span>
+    </div>
+    </>
   );
 }
 
