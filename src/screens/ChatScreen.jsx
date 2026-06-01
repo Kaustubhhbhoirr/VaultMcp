@@ -111,7 +111,7 @@ export default function ChatScreen({ messages, onSendMessage, onSendFile, shared
       <div className="mt-4 flex gap-2 items-end shrink-0 relative">
         
         {/* Slash Command Popup */}
-        {inputVal.startsWith('/') && !inputVal.includes(' ') && (
+        {inputVal.trimStart().startsWith('/') && !inputVal.replace(/^\s*\/\s*/, '/').includes(' ') && (
           <div className="absolute bottom-full left-0 mb-2 w-64 bg-surface-panel retro-border retro-outset z-10 p-1 flex flex-col gap-1 max-h-48 overflow-y-auto">
             <div className="px-2 py-1 bg-primary-container text-white font-label-caps text-[10px]">
               FORCE CATEGORY
@@ -123,7 +123,7 @@ export default function ChatScreen({ messages, onSendMessage, onSendFile, shared
               { cmd: '/design', label: 'Design', desc: 'Categorize as Design Resource' },
               { cmd: '/resource', label: 'Resources', desc: 'General Resource' },
               { cmd: '/other', label: 'Other', desc: 'Uncategorized' },
-            ].filter(c => c.cmd.startsWith(inputVal.toLowerCase())).map(item => (
+            ].filter(c => c.cmd.startsWith(inputVal.replace(/^\/\s*/, '/').toLowerCase())).map(item => (
               <button
                 key={item.cmd}
                 onClick={() => setInputVal(item.cmd + ' ')}

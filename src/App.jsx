@@ -84,21 +84,19 @@ export default function App() {
     let cleanText = text.trim();
     let forceCategory = null;
 
-    const slashCommands = {
-      '/ai': 'AI Tools',
-      '/dev': 'Dev Tools',
-      '/prompt': 'Prompts',
-      '/design': 'Design',
-      '/resource': 'Resources',
-      '/other': 'Other'
-    };
-
-    for (const [cmd, cat] of Object.entries(slashCommands)) {
-      if (cleanText.toLowerCase().startsWith(cmd + ' ') || cleanText.toLowerCase() === cmd) {
-        forceCategory = cat;
-        cleanText = cleanText.substring(cmd.length).trim();
-        break;
-      }
+    const slashMatch = cleanText.match(/^\/\s*(ai|dev|prompt|design|resource|other)\b/i);
+    if (slashMatch) {
+      const keyword = slashMatch[1].toLowerCase();
+      const catMap = {
+        'ai': 'AI Tools',
+        'dev': 'Dev Tools',
+        'prompt': 'Prompts',
+        'design': 'Design',
+        'resource': 'Resources',
+        'other': 'Other'
+      };
+      forceCategory = catMap[keyword];
+      cleanText = cleanText.substring(slashMatch[0].length).trim();
     }
 
     if (!cleanText && forceCategory) {
