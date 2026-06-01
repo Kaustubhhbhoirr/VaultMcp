@@ -1039,14 +1039,47 @@ async def mcp_compare(request: MCPCompareRequest):
     return {"status": "success", "matches": result}
 
 
-@app.get("/mcp")
-async def mcp_sse(request: Request):
-    """MCP SSE endpoint for Antigravity connection"""
-    async def event_stream():
-        # Send MCP capabilities
-        yield f"data: {json.dumps({'type': 'capabilities', 'tools': ['get_vault', 'search_vault', 'compare_project']})}\n\n"
-    
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+from mcp.server.fastmcp import FastMCP
+
+# Create MCP server
+mcp_server = FastMCP("VaultMCP")
+
+@mcp_server.tool()
+async def get_vault(drive_token: str) -> str:
+    """Get the full VaultMCP knowledge base"""
+    content = drive_get_vault(drive_token)
+    return content or "Vault is empty"
+
+@mcp_server.tool()
+async def search_vault(query: str, drive_token: str) -> str:
+    """Search vault for tools and resources matching a query"""
+    content = drive_get_vault(drive_token)
+    if not content:
+        return "Vault is empty"
+    lines = content.split('\n')
+    matches = [l for l in lines if query.lower() in l.lower()]
+    return '\n'.join(matches) if matches else "No matches found"
+
+@mcp_server.tool()
+async def compare_project(project_readme: str, drive_token: str, hf_token: str) -> str:
+    """Compare project README with vault to find relevant tools"""
+    vault_content = drive_get_vault(drive_token)
+    prompt = f"""
+    Project README:
+    {project_readme[:2000]}
+
+    Available tools in vault:
+    {vault_content[:3000]}
+
+    List the most relevant tools from the vault for this project.
+    Format: tool name — why it fits
+    """
+    result = process_text(prompt, hf_token)
+    return result.summary
+
+# Mount MCP server to FastAPI
+app.mount("/mcp", mcp_server.get_asgi_app())
+
 
 
 # ─── Run with Uvicorn ────────────────────────────────────────────────────────
