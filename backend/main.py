@@ -75,6 +75,9 @@ import io
 # ─── Load Environment ────────────────────────────────────────────────────────
 load_dotenv()
 
+import contextvars
+drive_token_var = contextvars.ContextVar("drive_token", default=None)
+
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000,https://vault-mcp-4ssi.vercel.app").split(",")
 
 # ─── App Instance ────────────────────────────────────────────────────────────
@@ -99,6 +102,13 @@ async def add_coop_header(request, call_next):
     response = await call_next(request)
     response.headers["Cross-Origin-Opener-Policy"] = "unsafe-none"
     return response
+
+@app.middleware("http")
+async def extract_drive_token(request: Request, call_next):
+    token = request.headers.get("x-drive-token")
+    if token:
+        drive_token_var.set(token)
+    return await call_next(request)
 
 
 # ─── Request / Response Models ───────────────────────────────────────────────
@@ -1045,15 +1055,21 @@ from mcp.server.fastmcp import FastMCP
 mcp_server = FastMCP("VaultMCP")
 
 @mcp_server.tool()
-async def get_vault(drive_token: str) -> str:
+async def get_vault() -> str:
     """Get the full VaultMCP knowledge base"""
-    content = drive_get_vault(drive_token)
+    token = drive_token_var.get()
+    if not token:
+        return "Error: Missing X-Drive-Token header"
+    content = drive_get_vault(token)
     return content or "Vault is empty"
 
 @mcp_server.tool()
-async def search_vault(query: str, drive_token: str) -> str:
+async def search_vault(query: str) -> str:
     """Search vault for tools and resources matching a query"""
-    content = drive_get_vault(drive_token)
+    token = drive_token_var.get()
+    if not token:
+        return "Error: Missing X-Drive-Token header"
+    content = drive_get_vault(token)
     if not content:
         return "Vault is empty"
     lines = content.split('\n')
@@ -1061,9 +1077,18 @@ async def search_vault(query: str, drive_token: str) -> str:
     return '\n'.join(matches) if matches else "No matches found"
 
 @mcp_server.tool()
-async def compare_project(project_readme: str, drive_token: str, hf_token: str) -> str:
+async def compare_project(project_readme: str) -> str:
     """Compare project README with vault to find relevant tools"""
-    vault_content = drive_get_vault(drive_token)
+    token = drive_token_var.get()
+    if not token:
+        return "Error: Missing X-Drive-Token header"
+    vault_content = drive_get_vault(token)
+    
+    # Use HF_TOKEN from environment variables
+    hf_token = os.getenv("HF_TOKEN")
+    if not hf_token:
+        return "Error: HF_TOKEN is not configured on the server"
+        
     prompt = f"""
     Project README:
     {project_readme[:2000]}

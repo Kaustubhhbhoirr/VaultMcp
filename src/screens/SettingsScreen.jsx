@@ -206,21 +206,29 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onCon
                 <div className="font-bold mb-1">PASTE INTO mcp_config.json:</div>
                 <div>~/.gemini/antigravity/mcp_config.json</div>
               </div>
+              <div className="text-status-error font-bold mt-1">
+                ⚠️ Keep your Drive token private. Never share this config publicly.
+              </div>
               <button 
                 onClick={() => {
                   const config = JSON.stringify({
                     mcpServers: {
                       vaultmcp: {
                         command: "npx",
-                        args: ["-y", "mcp-remote", "https://kaustubh5934-vaultmcp-backend.hf.space/mcp/sse"],
-                        env: { "X-Drive-Token": user.driveAccessToken }
+                        args: [
+                          "-y", 
+                          "mcp-remote", 
+                          "https://kaustubh5934-vaultmcp-backend.hf.space/mcp/sse",
+                          "--header",
+                          "X-Drive-Token: YOUR_DRIVE_TOKEN"
+                        ]
                       }
                     }
                   }, null, 2);
                   navigator.clipboard.writeText(config);
                   showToast('Config copied!');
                 }}
-                className="bg-surface-variant text-on-surface retro-border px-3 py-1 font-label-caps text-[10px] retro-outset active-press cursor-pointer w-full text-center"
+                className="bg-surface-variant text-on-surface retro-border px-3 py-1 font-label-caps text-[10px] retro-outset active-press cursor-pointer w-full text-center mt-1"
               >
                 [ COPY MCP CONFIG ]
               </button>
