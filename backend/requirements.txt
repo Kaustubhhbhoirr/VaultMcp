@@ -6,6 +6,9 @@
 fastapi
 uvicorn[standard]
 
+# ─── Audio Extraction ───────────────────────────────────
+yt-dlp
+
 # ─── HTTP Client (HF API, web scraping) ─
 httpx
 
@@ -19,11 +22,3 @@ python-dotenv
 
 # ─── File Upload Support (FastAPI multipart) ────────────
 python-multipart
-
-# --- File Parsing ---------------------------------------
-python-docx
-openpyxl
-python-pptx
-pymupdf
-
-mcp

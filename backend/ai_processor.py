@@ -24,18 +24,18 @@ import httpx
 
 # ─── Configuration ───────────────────────────────────────────────────────────
 
-PRIMARY_MODEL = "Qwen/Qwen2.5-7B-Instruct"
-FALLBACK_MODEL = "HuggingFaceH4/zephyr-7b-beta"
-HF_INFERENCE_URL = "https://router.huggingface.co/v1/chat/completions"
+MISTRAL_MODEL = "mistralai/Mistral-7B-Instruct-v0.3"
+HF_INFERENCE_URL = f"https://api-inference.huggingface.co/models/{MISTRAL_MODEL}"
 
 # Valid categories — the LLM must pick one of these
 VALID_CATEGORIES = [
     "AI Tools",
-    "Dev Tools",
     "Prompts",
-    "Design",
-    "Resources",
-    "Other"
+    "APIs & Libraries",
+    "Frameworks",
+    "UI Design",
+    "Tips & Tricks",
+    "Other",
 ]
 
 # Retry settings
@@ -74,55 +74,38 @@ class ProcessedContent:
     tools_mentioned: List[str] = field(default_factory=list)
     links_mentioned: List[str] = field(default_factory=list)
     raw_text: str = ""             # Original input text
-    model: str = PRIMARY_MODEL     # Model used
+    model: str = MISTRAL_MODEL     # Model used
     was_fallback: bool = False     # True if JSON parsing failed and we used fallback
 
 
 # ─── Prompt Construction ─────────────────────────────────────────────────────
 
 def _build_prompt(text: str) -> str:
-    """Build the full prompt for the model."""
+    """Build the full prompt for the Mistral model."""
     trimmed = text[:MAX_INPUT_CHARS]
     if len(text) > MAX_INPUT_CHARS:
         trimmed += "\n[...content truncated...]"
 
-    if "User's note:" in text:
-        prompt = f"""A user bookmarked a website with their personal observation.
-
-{trimmed}
-
-Return ONLY this JSON, no extra text, no backticks:
-{{"title": "short name of the website or brand",
-"category": "You MUST pick exactly one from: AI Tools, Dev Tools, Prompts, Design, Resources, Other. No other values allowed. Default to Resources if unsure.",
-"summary": "Write 2-3 sentences from the USER'S PERSPECTIVE based on their note. What did THEY observe or like about it? Use phrases like 'This site features...', 'Notable for its...', 'User saved this for its...'",
-"official_link": "the URL from the content",
-"tools_mentioned": [],
-"links_mentioned": []}}"""
-    else:
-        prompt = f"""
-You are a knowledge vault assistant. Analyze the following content and extract structured information.
-
-Content: {trimmed}
-
-Return ONLY a JSON object with NO extra text, NO markdown, NO backticks:
-{{
-  "title": "clear descriptive name of the tool, concept, or resource (NOT a URL)",
-  "category": "You MUST pick exactly one from: AI Tools, Dev Tools, Prompts, Design, Resources, Other. No other values allowed. Default to Resources if unsure.",
-  "summary": "REQUIRED. Minimum 2-3 sentences explaining: (1) what this tool/concept is, (2) what problem it solves, (3) who should use it. Never leave empty. Never copy the title.",
-  "official_link": "the most likely official URL for this tool or resource",
-  "tools_mentioned": ["list", "of", "tools"],
-  "links_mentioned": ["list", "of", "urls"]
-}}
-"""
-    return prompt
-
+    prompt = (
+        "Extract the following from this text and return JSON only, no extra text:\n"
+        "{\n"
+        "  \"title\": \"\",\n"
+        "  \"category\": \"AI Tools / Prompts / APIs & Libraries / Frameworks / UI Design / Tips & Tricks / Other\",\n"
+        "  \"summary\": \"\",\n"
+        "  \"official_link\": \"best known official URL for this tool or topic, leave empty if unknown\",\n"
+        "  \"tools_mentioned\": [],\n"
+        "  \"links_mentioned\": []\n"
+        "}\n"
+        f"Text: {trimmed}"
+    )
+    return f"<s>[INST] {prompt} [/INST]"
 
 
 # ─── Core Processing ────────────────────────────────────────────────────────
 
 def process_text(text: str, hf_token: str) -> ProcessedContent:
     """
-    Process raw text through Mistral-7B-Instruct (or Zephyr) to extract structured content.
+    Process raw text through Mistral-7B-Instruct to extract structured content.
 
     Args:
         text:     Raw text (transcript, pasted content, scraped page, etc.)
@@ -145,106 +128,93 @@ def process_text(text: str, hf_token: str) -> ProcessedContent:
 
     text = text.strip()
 
-    models_to_try = [PRIMARY_MODEL, FALLBACK_MODEL]
+    # ── Build prompt and request payload ─────────────────────────────────
+    prompt = _build_prompt(text)
+
+    headers = {
+        "Authorization": f"Bearer {hf_token.strip()}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens": 500,
+            "temperature": 0.1,         # Low temp for consistent structured output
+            "return_full_text": False,   # Only return the generated portion
+            "do_sample": True,
+        },
+    }
+
+    # ── Send to HF Inference API with retry logic ────────────────────────
+    backoff = INITIAL_BACKOFF_SECONDS
     last_error: Optional[Exception] = None
 
-    for model in models_to_try:
-        # ── Build prompt and request payload ─────────────────────────────────
-        prompt = _build_prompt(text)
-
-        headers = {
-            "Authorization": f"Bearer {hf_token.strip()}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
-            "max_tokens": 1024,
-            "temperature": 0.1,
-        }
-
-        # ── Send to HF Inference API with retry logic ────────────────────────
-        backoff = INITIAL_BACKOFF_SECONDS
-        model_failed = False
-
-        print(f"[AI Processor] Attempting extraction with model: {model}...", flush=True)
-
-        for attempt in range(MAX_RETRIES):
-            try:
-                with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as client:
-                    response = client.post(
-                        HF_INFERENCE_URL,
-                        headers=headers,
-                        json=payload,
-                    )
-
-                # ── Handle HTTP status codes ─────────────────────────────
-                if response.status_code == 200:
-                    result = _parse_llm_response(response, text)
-                    result.model = model
-                    return result
-
-                if response.status_code == 401:
-                    raise InvalidTokenError(
-                        "Hugging Face token is invalid or expired. "
-                        "Get a new token at: https://huggingface.co/settings/tokens"
-                    )
-
-                if response.status_code == 403:
-                    raise InvalidTokenError(
-                        f"HF Token needs Inference Provider permissions. "
-                        f"Go to huggingface.co/settings/tokens → update token → enable Inference Providers"
-                    )
-
-                if response.status_code == 429:
-                    last_error = ProcessingError(
-                        f"HF API rate limit hit for {model} (attempt {attempt + 1}/{MAX_RETRIES})."
-                    )
-
-                elif response.status_code == 503:
-                    body = _safe_json(response)
-                    estimated_time = body.get("estimated_time", backoff) if body else backoff
-                    backoff = min(float(estimated_time), MAX_BACKOFF_SECONDS)
-                    last_error = ProcessingError(
-                        f"Model {model} is loading (attempt {attempt + 1}/{MAX_RETRIES}). "
-                        f"Waiting {backoff:.0f}s..."
-                    )
-
-                else:
-                    body = _safe_json(response)
-                    error_detail = body.get("error", response.text[:300]) if body else response.text[:300]
-                    raise ProcessingError(
-                        f"HF API error for {model} (HTTP {response.status_code}): {error_detail}"
-                    )
-
-            except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as e:
-                last_error = ProcessingError(
-                    f"Network error on attempt {attempt + 1}/{MAX_RETRIES} for {model}: {e}"
+    for attempt in range(MAX_RETRIES):
+        try:
+            with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+                response = client.post(
+                    HF_INFERENCE_URL,
+                    headers=headers,
+                    json=payload,
                 )
 
-            except (InvalidTokenError, ProcessingError) as e:
-                if isinstance(e, InvalidTokenError) and "invalid or expired" in str(e):
-                    # Fundamental auth error, do not switch models
-                    raise
-                # Switch to fallback model
-                last_error = e
-                model_failed = True
-                break
+            # ── Handle HTTP status codes ─────────────────────────────
+            if response.status_code == 200:
+                return _parse_llm_response(response, text)
 
-            # ── Wait before retry ────────────────────────────────────────
-            if attempt < MAX_RETRIES - 1:
-                time.sleep(backoff)
-                backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
+            if response.status_code == 401:
+                raise InvalidTokenError(
+                    "Hugging Face token is invalid or expired. "
+                    "Get a new token at: https://huggingface.co/settings/tokens"
+                )
 
-        if model_failed:
-            print(f"[AI Processor] Model {model} failed with: {last_error}. Switching model...", flush=True)
-            continue
+            if response.status_code == 403:
+                raise InvalidTokenError(
+                    "Hugging Face token does not have permission to access this model."
+                )
 
-    # All retries / models exhausted — return fallback instead of crashing
-    return _build_fallback(text, f"All models failed. Last error: {last_error}")
+            if response.status_code == 429:
+                last_error = ProcessingError(
+                    f"HF API rate limit hit (attempt {attempt + 1}/{MAX_RETRIES})."
+                )
+
+            elif response.status_code == 503:
+                body = _safe_json(response)
+                estimated_time = body.get("estimated_time", backoff) if body else backoff
+                backoff = min(float(estimated_time), MAX_BACKOFF_SECONDS)
+                last_error = ProcessingError(
+                    f"Model is loading (attempt {attempt + 1}/{MAX_RETRIES}). "
+                    f"Waiting {backoff:.0f}s..."
+                )
+
+            else:
+                body = _safe_json(response)
+                error_detail = body.get("error", response.text[:300]) if body else response.text[:300]
+                raise ProcessingError(
+                    f"HF API error (HTTP {response.status_code}): {error_detail}"
+                )
+
+        except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as e:
+            last_error = ProcessingError(
+                f"Network error on attempt {attempt + 1}/{MAX_RETRIES}: {e}"
+            )
+
+        except (InvalidTokenError, ProcessingError) as e:
+            if isinstance(e, InvalidTokenError):
+                raise
+            # For ProcessingError with non-retryable status codes, it was already raised
+            # Only rate limits and loading errors fall through to here
+            if not isinstance(last_error, ProcessingError):
+                raise
+
+        # ── Wait before retry ────────────────────────────────────────
+        if attempt < MAX_RETRIES - 1:
+            time.sleep(backoff)
+            backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
+
+    # All retries exhausted — return fallback instead of crashing
+    return _build_fallback(text, f"All {MAX_RETRIES} attempts failed. Last error: {last_error}")
 
 
 # ─── Response Parsing ────────────────────────────────────────────────────────
@@ -259,27 +229,17 @@ def _parse_llm_response(response: httpx.Response, original_text: str) -> Process
     if body is None:
         return _build_fallback(original_text, "HF API returned non-JSON response.")
 
-    raw_output = ""
-    # ── Handle OpenAI-compatible response format ─────────────────────
-    if isinstance(body, dict) and "choices" in body:
-        choices = body.get("choices", [])
-        if choices and isinstance(choices, list) and len(choices) > 0:
-            message = choices[0].get("message", {})
-            if isinstance(message, dict):
-                raw_output = message.get("content", "")
-
-    # ── Legacy/Alternative response format fallback ──────────────────
-    if not raw_output:
-        if isinstance(body, list) and len(body) > 0:
-            generated = body[0]
-            if isinstance(generated, dict):
-                raw_output = generated.get("generated_text", "")
-            else:
-                raw_output = str(generated)
-        elif isinstance(body, dict):
-            raw_output = body.get("generated_text", json.dumps(body))
+    # HF Inference API returns a list: [{"generated_text": "..."}]
+    if isinstance(body, list) and len(body) > 0:
+        generated = body[0]
+        if isinstance(generated, dict):
+            raw_output = generated.get("generated_text", "")
         else:
-            raw_output = str(body)
+            raw_output = str(generated)
+    elif isinstance(body, dict):
+        raw_output = body.get("generated_text", json.dumps(body))
+    else:
+        raw_output = str(body)
 
     raw_output = raw_output.strip()
 
@@ -368,17 +328,17 @@ def _validate_and_build(
     if not title:
         title = original_text[:60].strip().rstrip(".")
     if not summary:
-        summary = original_text[:500].strip()
+        summary = original_text[:200].strip()
 
     return ProcessedContent(
         title=title[:60],
         category=category,
-        summary=summary[:500],
+        summary=summary[:200],
         official_link=official_link,
         tools_mentioned=tools,
         links_mentioned=links,
         raw_text=original_text,
-        model=PRIMARY_MODEL,
+        model=MISTRAL_MODEL,
         was_fallback=was_fallback,
     )
 
@@ -398,12 +358,12 @@ def _build_fallback(text: str, reason: str) -> ProcessedContent:
     return ProcessedContent(
         title=title,
         category="Other",
-        summary=text[:500].strip(),
+        summary=text[:200].strip(),
         official_link=official_link,
         tools_mentioned=[],
         links_mentioned=found_links[:10],
         raw_text=text,
-        model=PRIMARY_MODEL,
+        model=MISTRAL_MODEL,
         was_fallback=True,
     )
 
@@ -429,63 +389,6 @@ def result_to_dict(result: ProcessedContent) -> dict:
         "links_mentioned": result.links_mentioned,
     }
 
-def process_mcp_compare(prompt: str, hf_token: str) -> list:
-    """Send a raw prompt to the LLM and return a parsed JSON array."""
-    if not hf_token or not hf_token.strip():
-        raise InvalidTokenError("Hugging Face token is empty.")
-
-    models_to_try = [PRIMARY_MODEL, FALLBACK_MODEL]
-    last_error = None
-
-    for model in models_to_try:
-        headers = {
-            "Authorization": f"Bearer {hf_token.strip()}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 1024,
-            "temperature": 0.1,
-        }
-
-        backoff = INITIAL_BACKOFF_SECONDS
-        model_failed = False
-
-        for attempt in range(MAX_RETRIES):
-            try:
-                with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as client:
-                    response = client.post(HF_INFERENCE_URL, headers=headers, json=payload)
-
-                if response.status_code == 200:
-                    try:
-                        body = response.json()
-                        content = body["choices"][0]["message"]["content"]
-                        match = re.search(r'\[.*\]', content, re.DOTALL)
-                        if match:
-                            import json
-                            return json.loads(match.group(0))
-                        return []
-                    except Exception:
-                        return []
-                        
-                elif response.status_code == 503:
-                    import time
-                    time.sleep(backoff)
-                    backoff = min(backoff * 2, MAX_BACKOFF_SECONDS)
-                    continue
-                else:
-                    model_failed = True
-                    break
-            except Exception:
-                model_failed = True
-                break
-        
-        if model_failed:
-            continue
-            
-    return []
-
 
 # ─── CLI Test ────────────────────────────────────────────────────────────────
 
@@ -510,20 +413,20 @@ if __name__ == "__main__":
             text_input = f.read()
         print(f"[VaultMCP] Read text from file ({len(text_input)} chars)")
 
-    print(f"[VaultMCP] Processing text ({len(text_input)} chars) with {PRIMARY_MODEL}")
+    print(f"[VaultMCP] Processing text ({len(text_input)} chars) with {MISTRAL_MODEL}")
 
     try:
         result = process_text(text_input, test_token)
 
-        print(f"[VaultMCP] OK: Processing complete!")
+        print(f"[VaultMCP] ✓ Processing complete!")
         print(f"  Fallback : {'Yes (JSON parsing failed)' if result.was_fallback else 'No (clean JSON)'}")
         print(f"  Result   :")
         print(json.dumps(result_to_dict(result), indent=2))
 
     except InvalidTokenError as e:
-        print(f"[VaultMCP] ERROR: Token error: {e}")
+        print(f"[VaultMCP] ✗ Token error: {e}")
         sys.exit(1)
 
     except ProcessingError as e:
-        print(f"[VaultMCP] ERROR: Processing failed: {e}")
+        print(f"[VaultMCP] ✗ Processing failed: {e}")
         sys.exit(1)

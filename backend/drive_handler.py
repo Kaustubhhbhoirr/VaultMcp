@@ -16,7 +16,6 @@ Libraries: google-auth, google-api-python-client only.
 
 import os
 import io
-import json
 from dataclasses import dataclass
 from typing import Optional
 
@@ -26,9 +25,6 @@ from google.auth.transport.requests import Request as GoogleAuthRequest
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseUpload, MediaIoBaseDownload
-import logging
-
-logger = logging.getLogger(__name__)
 
 
 # ─── Load Environment ────────────────────────────────────────────────────────
@@ -45,8 +41,6 @@ SCOPES = ["https://www.googleapis.com/auth/drive.file"]
 VAULTMCP_FOLDER_NAME = "VaultMCP"
 VAULT_FILENAME = "vault.md"
 VAULT_MIME_TYPE = "text/markdown"
-CONFIG_FILENAME = "config.json"
-CONFIG_MIME_TYPE = "application/json"
 
 VAULT_HEADER = """# VaultMCP Vault
 
@@ -92,8 +86,6 @@ class SaveResult:
 
 # ─── OAuth2 Flow ─────────────────────────────────────────────────────────────
 
-import urllib.parse
-
 def get_auth_url() -> str:
     """
     Generate the Google OAuth2 consent URL for the user to visit.
@@ -106,19 +98,14 @@ def get_auth_url() -> str:
     """
     _validate_client_credentials()
 
-    # Manually construct URL to avoid stateful PKCE generation by google-auth-oauthlib,
-    # which breaks our stateless token exchange in auth_google()
-    params = {
-        "client_id": GOOGLE_CLIENT_ID,
-        "redirect_uri": GOOGLE_REDIRECT_URI,
-        "response_type": "code",
-        "scope": " ".join(SCOPES),
-        "access_type": "offline",
-        "prompt": "consent",
-        "include_granted_scopes": "true",
-    }
-    
-    return "https://accounts.google.com/o/oauth2/auth?" + urllib.parse.urlencode(params)
+    flow = _build_oauth_flow()
+    auth_url, _ = flow.authorization_url(
+        access_type="offline",
+        prompt="consent",
+        include_granted_scopes="true",
+    )
+
+    return auth_url
 
 
 def auth_google(auth_code: str) -> AuthTokens:
@@ -165,14 +152,9 @@ def auth_google(auth_code: str) -> AuthTokens:
 
 # ─── Drive Operations ───────────────────────────────────────────────────────
 
-def save_to_drive(
-    md_entry: str,
-    access_token: str,
-    refresh_token: str = None,
-    overwrite: bool = False
-) -> SaveResult:
+def save_to_drive(md_entry: str, access_token: str, refresh_token: str = None) -> SaveResult:
     """
-    Saves or appends md_entry to vault.md in VaultMCP folder on Google Drive.
+    Append a new Markdown entry to vault.md in the user's Google Drive.
 
     If the VaultMCP folder doesn't exist, it is created.
     If vault.md doesn't exist, it is created with the standard header.
@@ -199,22 +181,16 @@ def save_to_drive(
     file_id = _find_file_in_folder(service, VAULT_FILENAME, folder_id)
 
     if file_id:
-        if overwrite:
-            # Overwrite entirely
-            updated_content = md_entry
-        else:
-            # vault.md exists — download current content, append, re-upload
-            existing_content = _download_file_content(service, file_id)
+        # vault.md exists — download current content, append, re-upload
+        existing_content = _download_file_content(service, file_id)
 
-            # Ensure clean separation
-            if not existing_content.endswith("\n"):
-                existing_content += "\n"
+        # Ensure clean separation
+        if not existing_content.endswith("\n"):
+            existing_content += "\n"
 
-            updated_content = existing_content + "\n" + md_entry
+        updated_content = existing_content + "\n" + md_entry
 
         _update_file_content(service, file_id, updated_content)
-
-        logger.info(f"File saved to Drive (overwrite={overwrite}). File ID: {file_id}, Folder: VaultMCP/vault.md")
 
         return SaveResult(
             file_id=file_id,
@@ -235,61 +211,12 @@ def save_to_drive(
             mime_type=VAULT_MIME_TYPE,
         )
 
-        logger.info(f"File saved to Drive. File ID: {file_id}, Folder: VaultMCP/vault.md")
-
         return SaveResult(
             file_id=file_id,
             folder_id=folder_id,
             file_name=VAULT_FILENAME,
             action="created",
         )
-
-
-def save_file_to_drive(
-    filename: str,
-    content_bytes: bytes,
-    mime_type: str,
-    access_token: str,
-    refresh_token: str = None
-) -> str:
-    """
-    Uploads a file to the VaultMCP folder and makes it accessible via a shareable link.
-    Returns the webViewLink (shareable link).
-    """
-    service = _build_drive_service(access_token, refresh_token)
-    folder_id = _find_or_create_folder(service)
-
-    try:
-        # 1. Upload file
-        file_metadata = {
-            "name": filename,
-            "parents": [folder_id],
-        }
-        media = MediaIoBaseUpload(
-            io.BytesIO(content_bytes),
-            mimetype=mime_type,
-            resumable=True,
-        )
-
-        uploaded_file = service.files().create(
-            body=file_metadata,
-            media_body=media,
-            fields="id, webViewLink",
-        ).execute()
-
-        file_id = uploaded_file.get("id")
-
-        # 2. Make it shareable (anyone with link can read)
-        service.permissions().create(
-            fileId=file_id,
-            body={"type": "anyone", "role": "reader"},
-        ).execute()
-
-        logger.info(f"Uploaded file {filename} to VaultMCP drive. ID: {file_id}")
-        return uploaded_file.get("webViewLink", "")
-    except Exception as e:
-        logger.error(f"Failed to upload file to drive: {e}")
-        raise DriveError(f"Failed to upload file to Drive: {e}")
 
 
 def get_vault(access_token: str, refresh_token: str = None) -> Optional[str]:
@@ -320,44 +247,6 @@ def get_vault(access_token: str, refresh_token: str = None) -> Optional[str]:
         return None
 
     return _download_file_content(service, file_id)
-
-
-def save_user_config(config: dict, access_token: str, refresh_token: str = None) -> None:
-    """
-    Save user configuration (like HF token and display name) to config.json in Drive.
-    """
-    service = _build_drive_service(access_token, refresh_token)
-    folder_id = _find_or_create_folder(service)
-    file_id = _find_file_in_folder(service, CONFIG_FILENAME, folder_id)
-
-    content = json.dumps(config, indent=2)
-
-    if file_id:
-        _update_file_content(service, file_id, content, mime_type=CONFIG_MIME_TYPE)
-        logger.info(f"Config updated in Drive. File ID: {file_id}")
-    else:
-        file_id = _create_file(service, CONFIG_FILENAME, content, folder_id, mime_type=CONFIG_MIME_TYPE)
-        logger.info(f"Config created in Drive. File ID: {file_id}")
-
-
-def get_user_config(access_token: str, refresh_token: str = None) -> Optional[dict]:
-    """
-    Fetch user configuration from config.json in Drive.
-    """
-    service = _build_drive_service(access_token, refresh_token)
-    folder_id = _find_folder(service)
-    if not folder_id:
-        return None
-
-    file_id = _find_file_in_folder(service, CONFIG_FILENAME, folder_id)
-    if not file_id:
-        return None
-
-    content = _download_file_content(service, file_id)
-    try:
-        return json.loads(content)
-    except json.JSONDecodeError:
-        return None
 
 
 # ─── Internal: Build Service & Credentials ──────────────────────────────────
@@ -555,7 +444,7 @@ def _download_file_content(service, file_id: str) -> str:
         raise DriveError(f"Failed to download file {file_id}: {e}") from e
 
 
-def _update_file_content(service, file_id: str, content: str, mime_type: str = VAULT_MIME_TYPE):
+def _update_file_content(service, file_id: str, content: str):
     """
     Overwrite a file's content on Google Drive.
 
@@ -563,12 +452,11 @@ def _update_file_content(service, file_id: str, content: str, mime_type: str = V
         service:  Drive API service.
         file_id:  ID of the file to update.
         content:  New full content string.
-        mime_type: MIME type of the file.
     """
     try:
         media = MediaIoBaseUpload(
             io.BytesIO(content.encode("utf-8")),
-            mimetype=mime_type,
+            mimetype=VAULT_MIME_TYPE,
             resumable=True,
         )
 
@@ -617,40 +505,6 @@ def _create_file(
 
     except Exception as e:
         raise DriveError(f"Failed to create file {name}: {e}") from e
-
-
-def get_file_content(
-    file_id: str,
-    access_token: str,
-    refresh_token: str = None
-) -> str:
-    """Download the textual content of a file from Drive by its file ID."""
-    service = _build_drive_service(access_token, refresh_token)
-    try:
-        return _download_file_content(service, file_id)
-    except Exception as e:
-        raise DriveError(f"Failed to download file {file_id}: {e}")
-
-
-def clear_vault_files(access_token: str, refresh_token: str = None) -> None:
-    """Delete all files in VaultMCP Drive folder EXCEPT config.json"""
-    service = _build_drive_service(access_token, refresh_token)
-    folder_id = _find_folder(service)
-    if not folder_id:
-        return
-    
-    # List all files in VaultMCP folder
-    results = service.files().list(
-        q=f"'{folder_id}' in parents",
-        fields="files(id, name)"
-    ).execute()
-    
-    files = results.get('files', [])
-    for file in files:
-        # Keep config.json — delete everything else
-        if file['name'] != 'config.json':
-            service.files().delete(fileId=file['id']).execute()
-            logger.info(f"Deleted: {file['name']}")
 
 
 # ─── CLI Test ────────────────────────────────────────────────────────────────

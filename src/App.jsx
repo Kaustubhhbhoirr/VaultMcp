@@ -520,6 +520,21 @@ export default function App() {
     setVaultItems([]);
   };
 
+  const handleLogout = () => {
+    setUser({
+      name: '',
+      hfToken: '',
+      isDriveConnected: false,
+      driveAccessToken: '',
+      driveRefreshToken: '',
+    });
+    setVaultItems([]);
+    setMessages(INITIAL_MESSAGES);
+    setActiveTab('chat');
+    showToast('Logged out successfully', 'success');
+  };
+
+
 
   // If user has not completed onboarding, lock them in onboarding screen
   if (!user.name) {
@@ -613,6 +628,7 @@ export default function App() {
             onClearVault={handleClearVault}
             onConnectDrive={handleConnectDrive}
             onSyncFromDrive={handleSyncFromDrive}
+            onLogout={handleLogout}
           />
         )}
       </div>

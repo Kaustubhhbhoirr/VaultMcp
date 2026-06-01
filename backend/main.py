@@ -474,6 +474,11 @@ async def process_content(request: ProcessRequest):
         processed = process_text(text_for_ai, hf_token)
         final_category = detect_category(input_type, source_url, processed.category)
         processed.category = final_category
+        
+        # Keep the exact prompt text if it was a plain text input!
+        if input_type == "text":
+            processed.summary = content
+
         processed_dict = result_to_dict(processed)
         pipeline_steps.append({
             "step": 3, "name": "ai_structure", "status": "done",
@@ -1083,6 +1088,8 @@ async def compare_project(project_readme: str) -> str:
     if not token:
         return "Error: Missing X-Drive-Token header"
     vault_content = drive_get_vault(token)
+    if not vault_content:
+        return "Your Vault is currently empty! Add some tools to your VaultMCP first before running the comparison."
     
     # Use HF_TOKEN from environment variables
     hf_token = os.getenv("HF_TOKEN")
@@ -1114,4 +1121,11 @@ if __name__ == "__main__":
 
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run("main:app", host=host, port=port, reload=True)
+    uvicorn.run(
+        "main:app", 
+        host=host, 
+        port=port, 
+        reload=True,
+        proxy_headers=True,
+        forwarded_allow_ips="*"
+    )

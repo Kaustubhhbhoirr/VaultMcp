@@ -3,7 +3,7 @@ import ScrollReveal from '../components/ScrollReveal';
 import RetroModal from '../components/RetroModal';
 import { useToast } from '../components/RetroToast';
 
-export default function SettingsScreen({ user, onUpdateUser, onClearVault, onConnectDrive, onSyncFromDrive }) {
+export default function SettingsScreen({ user, onUpdateUser, onClearVault, onConnectDrive, onSyncFromDrive, onLogout }) {
   const [displayName, setDisplayName] = useState(user.name || '');
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
   const [tempToken, setTempToken] = useState(user.hfToken || '');
@@ -45,7 +45,7 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onCon
           <div className="flex justify-between items-center">
             <h2 className="text-on-surface-variant font-label-caps text-label-caps opacity-70 tracking-widest uppercase">USER</h2>
             <button 
-              onClick={onClearVault}
+              onClick={onLogout}
               className="bg-surface-variant text-on-surface retro-border px-3 py-1 font-label-caps text-[10px] retro-outset active-press cursor-pointer"
             >
               LOGOUT

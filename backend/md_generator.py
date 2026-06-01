@@ -28,11 +28,12 @@ from typing import List, Optional
 # Valid categories in display order
 CATEGORIES_ORDER = [
     "AI Tools",
-    "Dev Tools",
     "Prompts",
-    "Design",
-    "Resources",
-    "Other"
+    "APIs & Libraries",
+    "Frameworks",
+    "UI Design",
+    "Tips & Tricks",
+    "Other",
 ]
 
 VAULT_HEADER = "# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n"
@@ -48,7 +49,6 @@ class VaultEntry:
     summary: str
     official_link: str = ""
     source_url: str = ""
-    md_file_link: str = ""
     tools_mentioned: List[str] = field(default_factory=list)
     links_mentioned: List[str] = field(default_factory=list)
     saved_on: str = ""                  # Will be auto-set if empty
@@ -117,9 +117,6 @@ def generate_entry_md(entry: VaultEntry) -> str:
         lines.append(f"- Official link: {entry.official_link}")
     else:
         lines.append("- Official link: N/A")
-
-    if entry.md_file_link:
-        lines.append(f"- MD File: {entry.md_file_link}")
 
     # Source URL (where the user found this content)
     if entry.source_url:
@@ -205,12 +202,8 @@ def generate_vault_md(entries: List[VaultEntry]) -> str:
             else:
                 lines.append("- Official link: N/A")
 
-            if entry.md_file_link:
-                lines.append(f"- MD File: {entry.md_file_link}")
-
             if entry.source_url:
                 lines.append(f"- Source: {entry.source_url}")
-
 
             if entry.tools_mentioned:
                 tools_str = ", ".join(entry.tools_mentioned)
@@ -293,12 +286,8 @@ def _render_entry_lines(entry: VaultEntry) -> str:
     else:
         lines.append("- Official link: N/A")
 
-    if entry.md_file_link:
-        lines.append(f"- MD File: {entry.md_file_link}")
-
     if entry.source_url:
         lines.append(f"- Source: {entry.source_url}")
-
 
     if entry.tools_mentioned:
         tools_str = ", ".join(entry.tools_mentioned)
@@ -344,7 +333,6 @@ def build_entry(
     processed: dict,
     source_url: str = "",
     official_link: str = "",
-    md_file_link: str = "",
 ) -> VaultEntry:
     """
     Build a VaultEntry from ai_processor output + web_searcher result.
@@ -357,18 +345,12 @@ def build_entry(
     Returns:
         VaultEntry ready for Markdown generation.
     """
-    VALID_CATEGORIES = ["AI Tools", "Dev Tools", "Prompts", "Design", "Resources", "Other"]
-    cat = processed.get("category", "Other")
-    if cat not in VALID_CATEGORIES:
-        cat = "Other"
-
     return VaultEntry(
         title=processed.get("title", "Untitled"),
-        category=cat,
+        category=processed.get("category", "Other"),
         summary=processed.get("summary", ""),
         official_link=official_link,
         source_url=source_url,
-        md_file_link=md_file_link,
         tools_mentioned=processed.get("tools_mentioned", []),
         links_mentioned=processed.get("links_mentioned", []),
     )

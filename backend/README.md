@@ -1,7 +1,7 @@
 ---
 title: VaultMCP Backend
 emoji: 🗄
-colorFrom: yellow
+colorFrom: orange
 colorTo: yellow
 sdk: docker
 pinned: false
