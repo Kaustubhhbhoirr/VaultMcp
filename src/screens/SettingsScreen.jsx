@@ -212,7 +212,7 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onCon
                     mcpServers: {
                       vaultmcp: {
                         command: "npx",
-                        args: ["-y", "mcp-remote", "https://kaustubh5934-vaultmcp-backend.hf.space/mcp"],
+                        args: ["-y", "mcp-remote", "https://kaustubh5934-vaultmcp-backend.hf.space/mcp/sse"],
                         env: { "X-Drive-Token": user.driveAccessToken }
                       }
                     }

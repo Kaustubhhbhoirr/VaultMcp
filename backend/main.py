@@ -1078,7 +1078,7 @@ async def compare_project(project_readme: str, drive_token: str, hf_token: str) 
     return result.summary
 
 # Mount MCP server to FastAPI
-app.mount("/mcp", mcp_server.get_asgi_app())
+app.mount("/mcp", mcp_server.sse_app())
 
 
 
