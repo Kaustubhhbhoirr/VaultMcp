@@ -94,6 +94,11 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry, user
         entries.forEach(entry => {
           mdContent += `### ${entry.title}\n`;
           mdContent += `- Summary: ${entry.summary || ''}\n`;
+          if (entry.exactPrompt) {
+            mdContent += `- Exact Prompt:\n  \`\`\`text\n`;
+            entry.exactPrompt.split('\n').forEach(line => mdContent += `  ${line}\n`);
+            mdContent += `  \`\`\`\n`;
+          }
           mdContent += `- Official link: ${entry.officialLink || 'N/A'}\n`;
           if (entry.sourceUrl) {
             mdContent += `- Source: ${entry.sourceUrl}\n`;
@@ -113,6 +118,11 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry, user
       items.forEach(entry => {
         mdContent += `### ${entry.title}\n`;
         mdContent += `- Summary: ${entry.summary || ''}\n`;
+        if (entry.exactPrompt) {
+          mdContent += `- Exact Prompt:\n  \`\`\`text\n`;
+          entry.exactPrompt.split('\n').forEach(line => mdContent += `  ${line}\n`);
+          mdContent += `  \`\`\`\n`;
+        }
         mdContent += `- Official link: ${entry.officialLink || 'N/A'}\n`;
         if (entry.sourceUrl) {
           mdContent += `- Source: ${entry.sourceUrl}\n`;
@@ -215,6 +225,11 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry, user
                       <p className="font-body-md text-body-md text-on-surface-variant">
                         {item.summary || item.text}
                       </p>
+                      {item.exactPrompt && (
+                        <div className="bg-white retro-border p-2 font-mono-code text-[11px] whitespace-pre-wrap retro-inset-medium mt-2 text-black">
+                          {item.exactPrompt}
+                        </div>
+                      )}
                       {item.sourceUrl && (
                         <div className="bg-white retro-border p-2 font-mono-code text-[11px] break-all retro-inset-medium">
                           SRC: <a className="underline text-tertiary" href={item.sourceUrl} target="_blank" rel="noreferrer">{item.sourceUrl}</a>

@@ -474,10 +474,6 @@ async def process_content(request: ProcessRequest):
         processed = process_text(text_for_ai, hf_token)
         final_category = detect_category(input_type, source_url, processed.category)
         processed.category = final_category
-        
-        # Keep the exact prompt text if it was a plain text input!
-        if input_type == "text":
-            processed.summary = content
 
         processed_dict = result_to_dict(processed)
         pipeline_steps.append({
@@ -511,6 +507,7 @@ async def process_content(request: ProcessRequest):
         processed=processed_dict,
         source_url=source_url,
         official_link=official_link,
+        exact_prompt=content if input_type == "text" else "",
     )
     md_entry = generate_entry_md(entry)
     saved_on = format_retro_date(datetime.utcnow())
@@ -526,6 +523,7 @@ async def process_content(request: ProcessRequest):
             "title": processed.title,
             "category": processed.category,
             "summary": processed.summary,
+            "exact_prompt": content if input_type == "text" else "",
             "official_link": official_link,
             "source_url": source_url,
             "tools_mentioned": processed.tools_mentioned,

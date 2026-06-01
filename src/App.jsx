@@ -134,6 +134,7 @@ export default function App() {
         category: result.category.toUpperCase(),
         date: result.saved_on,
         summary: result.summary,
+        exactPrompt: result.exact_prompt || '',
         sourceUrl: result.source_url || result.official_link || '',
         officialLink: result.official_link || '',
         mdEntry: result.md_entry,
@@ -225,6 +226,7 @@ export default function App() {
         category: result.category.toUpperCase(),
         date: result.saved_on,
         summary: result.summary,
+        exactPrompt: result.exact_prompt || '',
         sourceUrl: result.source_url || result.official_link || '',
         officialLink: result.official_link || '',
         originalLink: result.original_file_link || '',
@@ -731,25 +733,41 @@ function parseVaultMd(mdContent) {
     let toolsMentioned = '';
     let originalLink = '';
     let mdLink = '';
+    let exactPrompt = '';
+    let currentBlock = null;
 
     for (const line of lines) {
       const trimmed = line.trim();
       if (trimmed.startsWith('- Summary:')) {
-        summary = trimmed.replace('- Summary:', '').trim();
+        if (trimmed === '- Summary:') currentBlock = 'summary';
+        else summary = trimmed.replace('- Summary:', '').trim();
+      } else if (trimmed.startsWith('- Exact Prompt:')) {
+        if (trimmed === '- Exact Prompt:') currentBlock = 'exactPrompt';
+        else exactPrompt = trimmed.replace('- Exact Prompt:', '').trim();
       } else if (trimmed.startsWith('- Official link:')) {
+        currentBlock = null;
         officialLink = trimmed.replace('- Official link:', '').trim();
         if (officialLink === 'N/A') officialLink = '';
       } else if (trimmed.startsWith('- Source:')) {
+        currentBlock = null;
         sourceUrl = trimmed.replace('- Source:', '').trim();
       } else if (trimmed.startsWith('- Tools mentioned:')) {
+        currentBlock = null;
         toolsMentioned = trimmed.replace('- Tools mentioned:', '').trim();
       } else if (trimmed.startsWith('- Saved on:')) {
+        currentBlock = null;
         savedOn = trimmed.replace('- Saved on:', '').trim();
       } else if (trimmed.startsWith('- Original File:')) {
+        currentBlock = null;
         originalLink = trimmed.replace('- Original File:', '').trim();
       } else if (trimmed.startsWith('- MD File:')) {
+        currentBlock = null;
         const match = trimmed.match(/https?:\/\/\S+/);
         if (match) mdLink = match[0];
+      } else if (currentBlock) {
+        if (trimmed.startsWith('```')) continue;
+        if (currentBlock === 'summary') summary += (summary ? '\n' : '') + trimmed;
+        else if (currentBlock === 'exactPrompt') exactPrompt += (exactPrompt ? '\n' : '') + trimmed;
       }
     }
 
@@ -768,6 +786,7 @@ function parseVaultMd(mdContent) {
       category: currentCategory,
       date: savedOn || formatRetroDate(new Date()),
       summary,
+      exactPrompt,
       sourceUrl: sourceUrl || officialLink,
       officialLink,
       originalLink,
