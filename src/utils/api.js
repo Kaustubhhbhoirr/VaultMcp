@@ -13,7 +13,7 @@ const API_BASE = import.meta.env.VITE_API_URL || 'https://kaustubh5934-vaultmcp-
  * @param {string} hfToken - User's Hugging Face token
  * @returns {Promise<object>} Pipeline result
  */
-export async function processContent(content, hfToken) {
+export async function processContent(content, hfToken, forceCategory = null) {
   const res = await fetch(`${API_BASE}/process`, {
     method: 'POST',
     headers: {
@@ -24,6 +24,7 @@ export async function processContent(content, hfToken) {
       content,
       hf_token: hfToken,
       content_type: 'auto',
+      force_category: forceCategory,
     }),
   });
 

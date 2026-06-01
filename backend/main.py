@@ -118,6 +118,7 @@ class ProcessRequest(BaseModel):
     content: str
     hf_token: str                         # User's Hugging Face token (required)
     content_type: Optional[str] = "auto"  # "url" | "text" | "auto"
+    force_category: Optional[str] = None  # User overridden category
 
 
 class DriveAuthRequest(BaseModel):
@@ -472,7 +473,10 @@ async def process_content(request: ProcessRequest):
     # ── Step 3: AI structuring (Mistral) ───────────────────────────────
     try:
         processed = process_text(text_for_ai, hf_token)
-        final_category = detect_category(input_type, source_url, processed.category)
+        if request.force_category:
+            final_category = request.force_category
+        else:
+            final_category = detect_category(input_type, source_url, processed.category)
         processed.category = final_category
 
         processed_dict = result_to_dict(processed)

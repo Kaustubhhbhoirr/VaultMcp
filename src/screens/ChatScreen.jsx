@@ -107,13 +107,40 @@ export default function ChatScreen({ messages, onSendMessage, onSendFile, shared
         </div>
       </div>
 
-      {/* Input controls */}
-      <div className="mt-4 flex gap-2 items-end shrink-0">
+      {/* Input controls with relative positioning for popup */}
+      <div className="mt-4 flex gap-2 items-end shrink-0 relative">
+        
+        {/* Slash Command Popup */}
+        {inputVal.startsWith('/') && !inputVal.includes(' ') && (
+          <div className="absolute bottom-full left-0 mb-2 w-64 bg-surface-panel retro-border retro-outset z-10 p-1 flex flex-col gap-1 max-h-48 overflow-y-auto">
+            <div className="px-2 py-1 bg-primary-container text-white font-label-caps text-[10px]">
+              FORCE CATEGORY
+            </div>
+            {[
+              { cmd: '/ai', label: 'AI Tools', desc: 'Categorize as AI Tool' },
+              { cmd: '/dev', label: 'Dev Tools', desc: 'Categorize as Developer Tool' },
+              { cmd: '/prompt', label: 'Prompts', desc: 'Categorize as Prompt' },
+              { cmd: '/design', label: 'Design', desc: 'Categorize as Design Resource' },
+              { cmd: '/resource', label: 'Resources', desc: 'General Resource' },
+              { cmd: '/other', label: 'Other', desc: 'Uncategorized' },
+            ].filter(c => c.cmd.startsWith(inputVal.toLowerCase())).map(item => (
+              <button
+                key={item.cmd}
+                onClick={() => setInputVal(item.cmd + ' ')}
+                className="flex flex-col text-left px-2 py-1.5 hover:bg-surface-variant active-press cursor-pointer retro-border border-transparent hover:border-black transition-colors"
+              >
+                <span className="font-mono-code text-[12px] font-bold text-primary">{item.cmd}</span>
+                <span className="font-body-md text-[10px] text-on-surface-variant opacity-80">{item.desc}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="flex-1">
           <div className="bg-surface-container-lowest retro-border retro-inset flex items-center overflow-hidden px-1 py-1">
             <input 
               className="w-full bg-transparent border-none focus:ring-0 font-body-md placeholder:text-on-surface-variant placeholder:opacity-50 text-[12px] px-2 py-2" 
-              placeholder="Paste a link, prompt, or any text..." 
+              placeholder="Type '/' to force a category, or paste a link/text..." 
               type="text"
               value={inputVal}
               onChange={(e) => setInputVal(e.target.value)}

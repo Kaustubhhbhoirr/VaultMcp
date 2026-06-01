@@ -81,11 +81,36 @@ export default function App() {
 
   // ─── Real API call: process content ───────────────────────────────────
   const handleSendMessage = useCallback(async (text) => {
-    const isLink = isValidUrl(text.trim());
+    let cleanText = text.trim();
+    let forceCategory = null;
+
+    const slashCommands = {
+      '/ai': 'AI Tools',
+      '/dev': 'Dev Tools',
+      '/prompt': 'Prompts',
+      '/design': 'Design',
+      '/resource': 'Resources',
+      '/other': 'Other'
+    };
+
+    for (const [cmd, cat] of Object.entries(slashCommands)) {
+      if (cleanText.toLowerCase().startsWith(cmd + ' ') || cleanText.toLowerCase() === cmd) {
+        forceCategory = cat;
+        cleanText = cleanText.substring(cmd.length).trim();
+        break;
+      }
+    }
+
+    if (!cleanText && forceCategory) {
+      // Just in case user only typed the command
+      cleanText = text.trim(); 
+    }
+
+    const isLink = isValidUrl(cleanText);
     const hfToken = user.hfToken;
 
     // Add user message
-    const userMsg = { sender: 'user', text, isUrl: isLink };
+    const userMsg = { sender: 'user', text: text.trim(), isUrl: isLink };
     setMessages(prev => [...prev, userMsg]);
 
     if (!hfToken) {
@@ -102,7 +127,7 @@ export default function App() {
     const processingMsg = {
       id: msgId,
       sender: 'system',
-      label: isLink ? 'URL_EXTRACTOR' : 'TEXT_PROCESSOR',
+      label: forceCategory ? `FORCE: ${forceCategory.toUpperCase()}` : (isLink ? 'URL_EXTRACTOR' : 'TEXT_PROCESSOR'),
       isExtracting: true,
       step: 1,
       category: '',
@@ -115,7 +140,7 @@ export default function App() {
       // Step 2: call the real backend
       setMessages(prev => prev.map(m => m.id === msgId ? { ...m, step: 2 } : m));
 
-      const response = await processContent(text.trim(), hfToken);
+      const response = await processContent(cleanText, hfToken, forceCategory);
       const result = response.result;
 
       // Step 3: show success with real data
