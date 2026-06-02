@@ -100,8 +100,17 @@ export default function App() {
     }
 
     if (!cleanText && forceCategory) {
-      // Just in case user only typed the command
-      cleanText = text.trim(); 
+      // User only typed the command, but no content
+      setMessages(prev => [...prev, {
+        sender: 'system',
+        isError: true,
+        text: '● ERROR — You must enter some content or a link after the slash command (e.g. "/prompt Make a react app").',
+      }]);
+      return;
+    }
+
+    if (!cleanText && !forceCategory) {
+      return; // Do nothing if completely empty
     }
 
     const isLink = isValidUrl(cleanText);
