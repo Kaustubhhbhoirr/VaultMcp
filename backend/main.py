@@ -643,6 +643,7 @@ async def process_file(
             "title": processed.title,
             "category": processed_dict["category"],
             "summary": processed.summary,
+            "exact_prompt": text_content[:8000],
             "official_link": official_link,
             "source_url": "",
             "tools_mentioned": processed.tools_mentioned,
