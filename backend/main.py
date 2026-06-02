@@ -50,14 +50,6 @@ from md_generator import (
     format_retro_date,
     VaultEntry,
 )
-from drive_handler import (
-    auth_google as drive_auth_google,
-    get_auth_url as drive_get_auth_url,
-    save_to_drive as drive_save_to_drive,
-    get_vault as drive_get_vault,
-    DriveAuthError,
-    DriveError,
-)
 
 import fitz
 import docx
@@ -1026,10 +1018,10 @@ async def mcp_compare(request: MCPCompareRequest):
     Returns ranked list of relevant tools.
     """
     project_readme = request.project_readme
-    drive_token = request.drive_token
+    firebase_uid = request.drive_token  # Using drive_token field to carry Firebase UID for backwards compatibility
     
     # Fetch full vault
-    vault_content = drive_get_vault(drive_token)
+    vault_content = await get_vault_from_firestore(firebase_uid)
     if not vault_content:
         vault_content = ""
     
@@ -1057,19 +1049,21 @@ mcp_server = FastMCP("VaultMCP")
 @mcp_server.tool()
 async def get_vault() -> str:
     """Get the full VaultMCP knowledge base"""
-    token = drive_token_var.get()
-    if not token:
-        return "Error: Missing X-Drive-Token header"
-    content = drive_get_vault(token)
+    uid = drive_token_var.get()
+    if not uid:
+        return \"Error: Missing X-Drive-Token header (Firebase UID)\"
+    import asyncio
+    content = asyncio.run(get_vault_from_firestore(uid))
     return content or "Vault is empty"
 
 @mcp_server.tool()
 async def search_vault(query: str) -> str:
     """Search vault for tools and resources matching a query"""
-    token = drive_token_var.get()
-    if not token:
-        return "Error: Missing X-Drive-Token header"
-    content = drive_get_vault(token)
+    uid = drive_token_var.get()
+    if not uid:
+        return \"Error: Missing X-Drive-Token header (Firebase UID)\"
+    import asyncio
+    content = asyncio.run(get_vault_from_firestore(uid))
     if not content:
         return "Vault is empty"
     lines = content.split('\n')
@@ -1113,6 +1107,47 @@ app.mount("/mcp", mcp_server.sse_app())
 
 if __name__ == "__main__":
     import uvicorn
+
+async def get_vault_from_firestore(uid: str) -> str:
+    url = f"https://firestore.googleapis.com/v1/projects/vaultmcp-4431d/databases/(default)/documents/users/{uid}"
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url)
+        if resp.status_code == 200:
+            data = resp.json()
+            try:
+                items = data.get("fields", {}).get("vaultItems", {}).get("arrayValue", {}).get("values", [])
+                md = "# VaultMCP Vault
+
+> Save what you scroll. Use what you saved.
+
+---
+
+"
+                for item in items:
+                    fields = item.get("mapValue", {}).get("fields", {})
+                    title = fields.get("title", {}).get("stringValue", "")
+                    category = fields.get("category", {}).get("stringValue", "")
+                    date = fields.get("date", {}).get("stringValue", "")
+                    summary = fields.get("summary", {}).get("stringValue", "")
+                    exactPrompt = fields.get("exactPrompt", {}).get("stringValue", "")
+                    md += f"## [CATEGORY: {category}]
+
+### {title}
+"
+                    if summary:
+                        md += f"- Summary: {summary}
+"
+                    if exactPrompt:
+                        md += f"- Exact Prompt: {exactPrompt}
+"
+                    md += f"- Saved on: {date}
+
+"
+                return md
+            except Exception as e:
+                return f"Error parsing vault data: {e}"
+        return "Vault is empty or missing."
+
 
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))

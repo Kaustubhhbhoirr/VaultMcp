@@ -3,7 +3,7 @@ import ScrollReveal from '../components/ScrollReveal';
 import RetroModal from '../components/RetroModal';
 import { useToast } from '../components/RetroToast';
 
-export default function SettingsScreen({ user, onUpdateUser, onClearVault, onConnectDrive, onSyncFromDrive, onLogout }) {
+export default function SettingsScreen({ user, onUpdateUser, onClearVault, onLogout }) {
   const [displayName, setDisplayName] = useState(user.name || '');
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
   const [tempToken, setTempToken] = useState(user.hfToken || '');
@@ -178,22 +178,22 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onCon
               </div>
             </div>
 
-            {/* Drive Token for MCP */}
+            {/* Firebase UID for MCP */}
             <div className="flex flex-col gap-2 p-3 retro-border retro-outset bg-surface-panel">
-              <span className="font-label-caps text-[10px] text-on-surface-variant uppercase">DRIVE TOKEN</span>
+              <span className="font-label-caps text-[10px] text-on-surface-variant uppercase">FIREBASE UID</span>
               <div className="flex gap-2">
                 <input 
                   readOnly 
-                  value={user.driveAccessToken ? '●●●●●●●●●●' : 'Not connected'}
+                  value={user.uid ? '●●●●●●●●●●' : 'Not logged in'}
                   className="w-full bg-surface-container-lowest retro-border retro-inset px-2 py-1 font-mono-code text-[10px] focus:outline-none"
                 />
                 <button 
                   onClick={() => {
-                    navigator.clipboard.writeText(user.driveAccessToken);
-                    showToast('Token copied!');
+                    navigator.clipboard.writeText(user.uid);
+                    showToast('UID copied!');
                   }}
-                  disabled={!user.driveAccessToken}
-                  className={`bg-surface-variant text-on-surface retro-border px-3 py-1 font-label-caps text-[10px] retro-outset active-press whitespace-nowrap ${!user.driveAccessToken ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                  disabled={!user.uid}
+                  className={`bg-surface-variant text-on-surface retro-border px-3 py-1 font-label-caps text-[10px] retro-outset active-press whitespace-nowrap ${!user.uid ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                   [ COPY ]
                 </button>

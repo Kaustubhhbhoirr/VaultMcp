@@ -7,7 +7,9 @@ import SettingsScreen from './screens/SettingsScreen';
 import StatusBar from './components/StatusBar';
 import AuthCallback from './screens/AuthCallback';
 import { isValidUrl, formatRetroDate } from './utils/helpers';
-import { processContent, saveToDrive, getVaultFromDrive, getGoogleAuthUrl, exchangeGoogleAuthCode, healthCheck, processFile, getUserConfig, saveUserConfig, clearVault } from './utils/api';
+import { processContent, healthCheck, processFile } from './utils/api';
+import { db } from './firebase';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { useToast } from './components/RetroToast';
 
 // Initial chat history matching the designs
@@ -29,9 +31,7 @@ export default function App() {
     uid: '',
     name: '',
     hfToken: '',
-    isDriveConnected: false,
-    driveAccessToken: '',
-    driveRefreshToken: '',
+
   });
 
   const vaultCacheKey = user.uid ? `vaultmcp_vault_items_${user.uid}` : 'vaultmcp_vault_items';
@@ -65,23 +65,24 @@ export default function App() {
     };
   }, []);
 
-  // ─── Save config to Drive on token change ──────────────────────────────
+  // ─── Firestore Sync ──────────────────────────────
   useEffect(() => {
-    if (
-      user.isDriveConnected &&
-      user.driveAccessToken &&
-      user.hfToken &&
-      user.hfToken.trim() !== ''
-    ) {
-      console.log('HF token changed — saving to Drive...');
-      saveUserConfig(
-        user.hfToken,
-        user.name,
-        user.driveAccessToken,
-        user.driveRefreshToken
-      ).catch(console.error);
+    if (user.uid && vaultItems.length > 0) {
+      const docRef = doc(db, 'users', user.uid);
+      setDoc(docRef, { vaultItems }, { merge: true }).catch(console.error);
     }
-  }, [user.hfToken, user.isDriveConnected, user.driveAccessToken, user.name, user.driveRefreshToken]);
+  }, [vaultItems, user.uid]);
+
+  useEffect(() => {
+    if (user.uid) {
+      const docRef = doc(db, 'users', user.uid);
+      getDoc(docRef).then(snap => {
+        if (snap.exists() && snap.data().vaultItems) {
+          setVaultItems(snap.data().vaultItems);
+        }
+      }).catch(console.error);
+    }
+  }, [user.uid, setVaultItems]);
 
   // ─── Real API call: process content ───────────────────────────────────
   const handleSendMessage = useCallback(async (text) => {
@@ -178,14 +179,7 @@ export default function App() {
       };
       setVaultItems(prev => [newVaultItem, ...prev]);
 
-      // Auto-save to Google Drive if connected
-      if (user.isDriveConnected && user.driveAccessToken && result.md_entry) {
-        try {
-          await saveToDrive(result.md_entry, user.driveAccessToken, user.driveRefreshToken);
-        } catch {
-          // Non-blocking: entry is saved locally even if Drive fails
-        }
-      }
+
 
     } catch (err) {
       let errMsg = "● Could not process this. Try again or paste as plain text";
@@ -530,10 +524,7 @@ export default function App() {
   const handleOnboardingComplete = (userData) => {
     setUser(prev => {
       const newUser = { ...prev, ...userData };
-      if (newUser.isDriveConnected && newUser.driveAccessToken) {
-        console.log('Saving config to Drive (onboarding complete):', { hfToken: newUser.hfToken, name: newUser.name });
-        saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
-      }
+
       return newUser;
     });
   };
@@ -541,29 +532,18 @@ export default function App() {
   const handleUpdateUser = (updatedData) => {
     setUser(prev => {
       const newUser = { ...prev, ...updatedData };
-      if (newUser.isDriveConnected && newUser.driveAccessToken) {
-        console.log('Saving config to Drive (settings update):', { hfToken: newUser.hfToken, name: newUser.name });
-        saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
-      }
+
       return newUser;
     });
   };
 
   const handleClearVault = async () => {
-    // Save empty vault to Drive and delete files
-    if (user.isDriveConnected && user.driveAccessToken) {
-      try {
-        await clearVault(user.driveAccessToken, user.driveRefreshToken);
-        const header = "# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n\n---\n\n";
-        await saveToDrive(header, user.driveAccessToken, user.driveRefreshToken, true);
-        showToast('Vault files cleared from Drive', 'success');
-      } catch (err) {
-        console.error(err);
-        showToast('Failed to clear files from Drive', 'error');
-      }
+    if (user.uid) {
+      const docRef = doc(db, 'users', user.uid);
+      await setDoc(docRef, { vaultItems: [] }, { merge: true });
     }
-    // Clear local state
     setVaultItems([]);
+    showToast('Vault cleared', 'success');
   };
 
   const handleLogout = () => {
@@ -572,9 +552,7 @@ export default function App() {
       name: '',
       email: '',
       hfToken: '',
-      isDriveConnected: false,
-      driveAccessToken: '',
-      driveRefreshToken: '',
+
     });
     setVaultItems([]);
     setMessages(INITIAL_MESSAGES);
@@ -674,8 +652,7 @@ export default function App() {
             user={user} 
             onUpdateUser={handleUpdateUser} 
             onClearVault={handleClearVault}
-            onConnectDrive={handleConnectDrive}
-            onSyncFromDrive={handleSyncFromDrive}
+
             onLogout={handleLogout}
           />
         )}
