@@ -338,7 +338,8 @@ export default function App() {
       await setDoc(docRef, { vaultItems: [] }, { merge: true });
     }
     setVaultItems([]);
-    showToast('Vault cleared', 'success');
+    setMessages(INITIAL_MESSAGES);
+    showToast('Vault and chat history cleared', 'success');
   };
 
   const handleLogout = () => {
