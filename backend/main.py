@@ -55,8 +55,6 @@ from drive_handler import (
     get_auth_url as drive_get_auth_url,
     save_to_drive as drive_save_to_drive,
     get_vault as drive_get_vault,
-    save_user_config as drive_save_user_config,
-    get_user_config as drive_get_user_config,
     save_file_to_drive as drive_save_file_to_drive,
     get_file_content as drive_get_file_content,
     clear_vault_files as drive_clear_vault_files,
