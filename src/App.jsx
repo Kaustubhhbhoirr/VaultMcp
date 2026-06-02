@@ -26,6 +26,7 @@ export default function App() {
   const { showToast } = useToast();
 
   const [user, setUser] = useLocalStorage('vaultmcp_user', {
+    uid: '',
     name: '',
     hfToken: '',
     isDriveConnected: false,
@@ -33,8 +34,11 @@ export default function App() {
     driveRefreshToken: '',
   });
 
-  const [vaultItems, setVaultItems] = useLocalStorage('vaultmcp_vault_items', []);
-  const [messages, setMessages] = useLocalStorage('vaultmcp_messages', INITIAL_MESSAGES);
+  const vaultCacheKey = user.uid ? `vaultmcp_vault_items_${user.uid}` : 'vaultmcp_vault_items';
+  const messagesCacheKey = user.uid ? `vaultmcp_messages_${user.uid}` : 'vaultmcp_messages';
+
+  const [vaultItems, setVaultItems] = useLocalStorage(vaultCacheKey, []);
+  const [messages, setMessages] = useLocalStorage(messagesCacheKey, INITIAL_MESSAGES);
   const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'vault' | 'settings'
   const [sharedInput, setSharedInput] = useState('');
   const hasProcessedShare = useRef(false);
@@ -556,7 +560,9 @@ export default function App() {
 
   const handleLogout = () => {
     setUser({
+      uid: '',
       name: '',
+      email: '',
       hfToken: '',
       isDriveConnected: false,
       driveAccessToken: '',
@@ -571,12 +577,12 @@ export default function App() {
 
 
   // If user has not completed onboarding, lock them in onboarding screen
-  if (!user.name) {
+  if (!user.uid) {
     return (
       <>
         <div className="app-window mobile-canvas bg-background-base relative">
           <div className="scanline" />
-          <OnboardingScreen onComplete={handleOnboardingComplete} onConnectDrive={handleConnectDrive} isDriveConnected={user.isDriveConnected} />
+          <OnboardingScreen onComplete={handleOnboardingComplete} />
           <StatusBar 
             leftLabel={isBackendOnline ? "SYSTEM INITIALIZED" : "AWAITING SYSTEM INITIALIZATION"} 
             rightLabel={isBackendOnline ? "ONLINE" : "OFFLINE"} 

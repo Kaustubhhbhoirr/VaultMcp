@@ -11,6 +11,17 @@ export function useLocalStorage(key, initialValue) {
     }
   });
 
+  // Re-sync if the key changes
+  useEffect(() => {
+    try {
+      const item = window.localStorage.getItem(key);
+      setStoredValue(item ? JSON.parse(item) : initialValue);
+    } catch (error) {
+      setStoredValue(initialValue);
+    }
+  }, [key]);
+
+  // Save to local storage when state changes
   useEffect(() => {
     try {
       window.localStorage.setItem(key, JSON.stringify(storedValue));

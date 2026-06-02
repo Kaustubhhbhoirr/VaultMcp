@@ -1,20 +1,32 @@
 import React, { useState } from 'react';
 import WindowFrame from '../components/WindowFrame';
 import { useToast } from '../components/RetroToast';
+import { signInWithPopup } from 'firebase/auth';
+import { auth, googleProvider } from '../firebase';
 
-export default function OnboardingScreen({ onComplete, onConnectDrive, isDriveConnected }) {
-  const [name, setName] = useState('');
+export default function OnboardingScreen({ onComplete }) {
   const { showToast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleStart = () => {
-    if (!name.trim()) {
-      showToast("Please enter your name to set up the profile.", "warning");
-      return;
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
+      
+      onComplete({
+        uid: user.uid,
+        name: user.displayName || user.email.split('@')[0],
+        email: user.email,
+        isDriveConnected: false // Drive connects later
+      });
+      showToast("Successfully logged in!", "success");
+    } catch (error) {
+      console.error("Firebase Login Error:", error);
+      showToast("Failed to sign in with Google.", "error");
+    } finally {
+      setIsLoading(false);
     }
-    onComplete({
-      name,
-      isDriveConnected
-    });
   };
 
   return (
@@ -26,51 +38,24 @@ export default function OnboardingScreen({ onComplete, onConnectDrive, isDriveCo
             {/* Tagline & Subtext */}
             <div className="mb-6">
               <h1 className="font-headline-lg text-headline-lg text-text-main leading-none mb-3">Save what you scroll.</h1>
-              <p className="font-body-md text-on-surface-variant opacity-70">Set up once. Then just share.</p>
+              <p className="font-body-md text-on-surface-variant opacity-70">Log in to isolate your Vault data.</p>
             </div>
 
-            {/* Step 1 */}
-            <div className="space-y-2 mb-6">
-              <label className="font-label-caps text-label-caps block text-on-surface uppercase tracking-wider">Step 1</label>
-              <input 
-                className="w-full h-12 px-4 bg-white retro-border retro-inset-light focus:outline-none font-body-md text-text-main placeholder:text-on-surface-variant placeholder:opacity-40" 
-                placeholder="Your name" 
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-            </div>
-
-            {/* Step 2 */}
-            <div className="space-y-2 mb-6">
-              <label className="font-label-caps text-label-caps block text-on-surface uppercase tracking-wider">Step 2</label>
+            {/* Login CTA */}
+            <div className="py-2 mt-8">
               <button 
-                onClick={onConnectDrive}
-                className={`w-full h-14 font-headline-md text-[13px] sm:text-headline-md whitespace-nowrap uppercase retro-border retro-outset active-press transition-all ${
-                  isDriveConnected 
-                    ? 'bg-status-success text-text-main' 
-                    : 'bg-on-background text-primary-container hover:bg-opacity-90'
-                }`}
+                onClick={handleGoogleSignIn}
+                disabled={isLoading}
+                className={`w-full h-16 bg-on-background text-primary-container font-headline-md text-headline-md uppercase retro-border retro-outset active-press transition-all ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                {isDriveConnected ? '[ DRIVE CONNECTED ]' : '[ CONNECT GOOGLE DRIVE ]'}
-              </button>
-            </div>
-
-
-            {/* CTA */}
-            <div className="py-2">
-              <button 
-                onClick={handleStart}
-                className="w-full h-16 bg-on-background text-primary-container font-headline-md text-headline-md uppercase retro-border retro-outset active-press transition-all"
-              >
-                [ GET STARTED ]
+                {isLoading ? '[ AUTHENTICATING... ]' : '[ SIGN IN WITH GOOGLE ]'}
               </button>
             </div>
 
             {/* Note Footer */}
-            <div className="text-center mt-4">
+            <div className="text-center mt-6">
               <p className="font-label-caps text-[10px] leading-relaxed text-on-surface-variant opacity-60">
-                Data is stored locally.<br />Never on our servers.
+                Data is stored locally under your account.<br />Connect Google Drive later in Settings.
               </p>
             </div>
           </div>
