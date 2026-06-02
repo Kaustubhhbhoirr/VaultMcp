@@ -73,38 +73,7 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onLog
         <section className="space-y-3">
           <h2 className="text-on-surface-variant font-label-caps text-label-caps opacity-70 tracking-widest uppercase">CONNECTIONS</h2>
           <div className="space-y-4">
-            {/* Row 1: Google Drive */}
-            <div className="flex items-center justify-between p-3 retro-border retro-outset bg-surface-panel">
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[18px]">cloud</span>
-                  <span className="font-title-bar text-body-md font-bold">Google Drive</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className={`w-2.5 h-2.5 border border-on-surface ${user.isDriveConnected ? 'bg-status-success' : 'bg-status-error'}`}></span>
-                  <span className="text-[10px] font-bold text-on-surface-variant">
-                    {user.isDriveConnected ? 'CONNECTED' : 'DISCONNECTED'}
-                  </span>
-                </div>
-              </div>
-              <button 
-                onClick={onConnectDrive}
-                className="bg-surface-variant text-on-surface retro-border px-3 py-1 font-label-caps text-[10px] retro-outset active-press cursor-pointer"
-              >
-                {user.isDriveConnected ? 'RECONNECT' : 'CONNECT'}
-              </button>
-            </div>
 
-            {/* Sync from Drive */}
-            {user.isDriveConnected && (
-              <button
-                onClick={onSyncFromDrive}
-                className="w-full flex items-center justify-center gap-2 p-3 retro-border retro-outset bg-primary-container text-on-primary-container font-label-caps text-[11px] active-press cursor-pointer hover:opacity-90 transition-opacity"
-              >
-                <span className="material-symbols-outlined text-[16px]">sync</span>
-                [ SYNC FROM DRIVE ]
-              </button>
-            )}
 
             {/* Row 2: Hugging Face */}
             <div className="flex items-center justify-between p-3 retro-border retro-outset bg-surface-panel">
