@@ -189,7 +189,7 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onLog
                           "mcp-remote", 
                           "https://kaustubh5934-vaultmcp-backend.hf.space/mcp/sse",
                           "--header",
-                          "X-Drive-Token: YOUR_FIREBASE_UID"
+                          "X-Vault-Uid: YOUR_FIREBASE_UID"
                         ]
                       }
                     }

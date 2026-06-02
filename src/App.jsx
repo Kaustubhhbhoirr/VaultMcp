@@ -432,12 +432,8 @@ export default function App() {
         {activeTab === 'vault' && (
           <VaultScreen 
             vaultItems={vaultItems} 
-            onRefresh={fetchVaultFromDrive} 
             onDeleteEntry={(id, newMdContent) => {
               setVaultItems(prev => prev.filter(item => item.id !== id));
-              if (user.isDriveConnected && user.driveAccessToken) {
-                saveToDrive(newMdContent, user.driveAccessToken, user.driveRefreshToken, true).catch(console.error);
-              }
             }}
             user={user}
           />

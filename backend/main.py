@@ -92,7 +92,7 @@ async def add_coop_header(request, call_next):
 
 @app.middleware("http")
 async def extract_drive_token(request: Request, call_next):
-    token = request.headers.get("x-drive-token")
+    token = request.headers.get("x-vault-uid")
     if token:
         drive_token_var.set(token)
     return await call_next(request)
@@ -790,7 +790,7 @@ async def get_vault() -> str:
     """Get the full VaultMCP knowledge base"""
     uid = drive_token_var.get()
     if not uid:
-        return "Error: Missing X-Drive-Token header (Firebase UID)"
+        return "Error: Missing X-Vault-Uid header (Firebase UID)"
     content = await get_vault_from_firestore(uid)
     return content or "Vault is empty"
 
@@ -799,7 +799,7 @@ async def search_vault(query: str) -> str:
     """Search vault for tools and resources matching a query"""
     uid = drive_token_var.get()
     if not uid:
-        return "Error: Missing X-Drive-Token header (Firebase UID)"
+        return "Error: Missing X-Vault-Uid header (Firebase UID)"
     content = await get_vault_from_firestore(uid)
     if not content:
         return "Vault is empty"
@@ -812,7 +812,7 @@ async def compare_project(project_readme: str) -> str:
     """Compare project README with vault to find relevant tools"""
     uid = drive_token_var.get()
     if not uid:
-        return "Error: Missing X-Drive-Token header (Firebase UID)"
+        return "Error: Missing X-Vault-Uid header (Firebase UID)"
     vault_content = await get_vault_from_firestore(uid)
     if not vault_content:
         return "Your Vault is currently empty! Add some tools to your VaultMCP first before running the comparison."
