@@ -473,10 +473,8 @@ async def process_content(request: ProcessRequest):
     # ── Step 3: AI structuring (Mistral) ───────────────────────────────
     try:
         processed = process_text(text_for_ai, hf_token)
-        if request.force_category:
-            final_category = request.force_category
-        else:
-            final_category = detect_category(input_type, source_url, processed.category)
+        # Bypassing AI categorization completely: rely purely on manual Slash Commands, default to "Other"
+        final_category = request.force_category if request.force_category else "Other"
         processed.category = final_category
 
         processed_dict = result_to_dict(processed)
