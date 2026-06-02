@@ -51,18 +51,9 @@ from md_generator import (
     VaultEntry,
 )
 
-import fitz
-import docx
-import openpyxl
-import pptx
-import io
-
-
-
 # ─── Load Environment ────────────────────────────────────────────────────────
 load_dotenv()
 
-import contextvars
 drive_token_var = contextvars.ContextVar("drive_token", default=None)
 
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000,https://vault-mcp-4ssi.vercel.app").split(",")
@@ -108,42 +99,10 @@ class ProcessRequest(BaseModel):
     force_category: Optional[str] = None  # User overridden category
 
 
-class DriveAuthRequest(BaseModel):
-    """Body for POST /auth/google."""
-    auth_code: str
-
-
-class DriveTokenRequest(BaseModel):
-    """Body containing just tokens."""
-    access_token: str
-    refresh_token: Optional[str] = None
-
-
-class DriveSaveRequest(BaseModel):
-    """Body for POST /drive/save."""
-    md_entry: str                          # Pre-generated MD string from /process
-    access_token: str                      # User's Google Drive OAuth token
-    refresh_token: Optional[str] = None
-    overwrite: Optional[bool] = False
-
-
-class DriveVaultRequest(BaseModel):
-    """Query params for GET /drive/vault."""
-    pass
-
-
-class ConfigSaveRequest(BaseModel):
-    """Body for POST /config/save."""
-    access_token: str
-    refresh_token: Optional[str] = None
-    hf_token: Optional[str] = ""
-    display_name: Optional[str] = ""
-
-
 class MCPCompareRequest(BaseModel):
     project_readme: str
-    drive_token: str
-    hf_token: str
+    drive_token: str  # Actually contains Firebase UID now
+    hf_token: Optional[str] = None
 
 
 # ─── URL Detection Helpers ──────────────────────────────────────────────────
@@ -174,36 +133,6 @@ def detect_input_type(content: str) -> str:
 
     logger.info("[detect_input_type] Match found: text (default fallback)")
     return "text"
-
-
-def detect_category(input_type: str, url: str, ai_category: str) -> str:
-    """Override AI category with rule-based detection."""
-    
-    # GitHub repos always = Dev Tools
-    if input_type == "github":
-        return "Dev Tools"
-    
-    # Known AI tool domains
-    ai_domains = ["openai.com", "anthropic.com", "huggingface.co", 
-                  "midjourney.com", "perplexity.ai", "claude.ai",
-                  "gemini.google.com", "cursor.sh", "replicate.com"]
-    if any(domain in url for domain in ai_domains):
-        return "AI Tools"
-    
-    # Design/UI domains
-    design_domains = ["dribbble.com", "figma.com", "behance.net", 
-                      "awwwards.com", "tailwindcss.com", "shadcn"]
-    if any(domain in url for domain in design_domains):
-        return "Design"
-    
-    # Plain text with prompt keywords = Prompts
-    prompt_keywords = ["prompt", "system prompt", "instruction", "act as", "you are a"]
-    if input_type == "text" and any(kw in url.lower() for kw in prompt_keywords):
-        return "Prompts"
-    
-    # Fall back to AI category if it's valid
-    valid = ["AI Tools", "Dev Tools", "Prompts", "Design", "Resources", "Other"]
-    return ai_category if ai_category in valid else "Resources"
 
 
 # ─── Website Scraper (lightweight) ──────────────────────────────────────────
@@ -362,7 +291,6 @@ async def health_check():
             "ai_processor": "ready",
             "web_searcher": "ready",
             "md_generator": "ready",
-            "drive_handler": "ready",
         },
     }
 
@@ -524,491 +452,12 @@ async def process_content(request: ProcessRequest):
         "input_type": input_type,
     }
 
-
-def extract_text_from_file(raw_bytes: bytes, filename: str) -> str:
-    """Extract text content from various file formats and format as Markdown."""
-    ext = filename.lower().split('.')[-1] if '.' in filename else ''
-    
-    try:
-        if ext == 'pdf':
-            doc = fitz.open(stream=raw_bytes, filetype="pdf")
-            extracted = "\n".join([page.get_text() for page in doc])
-            return f"# Document Title\n> Converted from {filename} by VaultMCP\n\n---\n\n{extracted}"
-            
-        elif ext == 'docx':
-            doc = docx.Document(io.BytesIO(raw_bytes))
-            parts = []
-            for p in doc.paragraphs:
-                if p.style.name.startswith('Heading'):
-                    level = p.style.name.replace('Heading', '').strip()
-                    try:
-                        level_num = int(level)
-                        parts.append(f"{'#' * level_num} {p.text}")
-                    except ValueError:
-                        parts.append(f"# {p.text}")
-                else:
-                    parts.append(p.text)
-            extracted = "\n".join(parts)
-            return f"# Document Title\n> Converted from {filename} by VaultMCP\n\n---\n\n{extracted}"
-            
-        elif ext == 'xlsx':
-            wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), data_only=True)
-            parts = [f"# Spreadsheet: {filename}\n> Converted by VaultMCP\n"]
-            for i, sheet in enumerate(wb.worksheets, 1):
-                parts.append(f"## Sheet {i}: {sheet.title}")
-                rows = list(sheet.iter_rows(values_only=True))
-                if not rows:
-                    parts.append("")
-                    continue
-                # Header
-                header = rows[0]
-                parts.append("| " + " | ".join([str(v) if v is not None else "" for v in header]) + " |")
-                parts.append("|" + "|".join(["---" for _ in header]) + "|")
-                # Rows
-                for row in rows[1:]:
-                    parts.append("| " + " | ".join([str(v) if v is not None else "" for v in row]) + " |")
-                parts.append("")
-            return "\n".join(parts)
-            
-        elif ext == 'pptx':
-            prs = pptx.Presentation(io.BytesIO(raw_bytes))
-            parts = [f"# Presentation: {filename}\n> Converted by VaultMCP\n"]
-            for i, slide in enumerate(prs.slides, 1):
-                parts.append(f"## Slide {i}")
-                for shape in slide.shapes:
-                    if hasattr(shape, "text") and shape.text.strip():
-                        parts.append(shape.text)
-                parts.append("")
-            return "\n".join(parts)
-            
-    except Exception as e:
-        logger.error(f"Failed to parse {ext} file: {e}")
-        pass
-
-    # Fallback for plain text, unknown types, or failed parsing
-    text = raw_bytes.decode("utf-8", errors="replace")
-    return f"# Document: {filename}\n> Converted by VaultMCP\n\n---\n\n{text}"
-
-
-
-@app.post("/process/file")
-async def process_file(
-    file: UploadFile = File(...),
-    hf_token: str = Form(...),
-    drive_access_token: Optional[str] = Form(None),
-    drive_refresh_token: Optional[str] = Form(None),
-):
-    """
-    Process an uploaded file (PDF, text, etc.).
-    Reads file content as text and runs through the AI pipeline.
-    """
-    if not hf_token or not hf_token.strip():
-        raise HTTPException(status_code=400, detail="Hugging Face token is required.")
-
-    try:
-        raw_bytes = await file.read()
-        text_content = extract_text_from_file(raw_bytes, file.filename)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Could not read file: {e}")
-
-    if not text_content.strip():
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-
-    md_file_link = ""
-    if drive_access_token:
-        try:
-            # Upload MD version
-            md_filename = f"{file.filename}.md"
-            md_bytes = text_content.encode("utf-8")
-            md_file_link = drive_save_file_to_drive(
-                filename=md_filename,
-                content_bytes=md_bytes,
-                mime_type="text/markdown",
-                access_token=drive_access_token,
-                refresh_token=drive_refresh_token
-            )
-        except Exception as e:
-            logger.warning(f"Failed to save files to Drive: {e}")
-
-    # Prepend filename for context
-    text_for_ai = f"File: {file.filename}\n\n{text_content[:8000]}"
-
-    # Run through the same AI pipeline
-    try:
-        processed = process_text(text_for_ai, hf_token.strip())
-        processed_dict = result_to_dict(processed)
-    except AIInvalidTokenError as e:
-        raise HTTPException(status_code=401, detail=f"HF token error: {e}")
-    except ProcessingError as e:
-        raise HTTPException(status_code=422, detail=f"AI processing failed: {e}")
-
-    official_info = get_official_info(processed.official_link)
-    official_link = official_info.get("official_link", "")
-
-    entry = build_entry(
-        processed=processed_dict,
-        source_url=f"uploaded file ({file.filename})",
-        official_link=official_link,
-        md_file_link=md_file_link,
-    )
-    md_entry = generate_entry_md(entry)
-
-    return {
-        "status": "success",
-        "result": {
-            "title": processed.title,
-            "category": processed.category,
-            "summary": processed.summary,
-            "official_link": official_link,
-            "source_url": "",
-            "tools_mentioned": processed.tools_mentioned,
-            "links_mentioned": processed.links_mentioned,
-            "md_entry": md_entry,
-            "saved_on": format_retro_date(datetime.utcnow()),
-        },
-        "input_type": "file",
-        "filename": file.filename,
-        "md_file_link": md_file_link,
-    }
-
-
-# ─── Drive Routes ────────────────────────────────────────────────────────────
-
-@app.get("/drive/fetch")
-async def drive_fetch(
-    file_id: str,
-    access_token: str,
-    refresh_token: Optional[str] = None
-):
-    """Fetch raw text/markdown content of a file from Google Drive by its file ID."""
-    if not file_id:
-        raise HTTPException(status_code=400, detail="file_id is required.")
-    if not access_token:
-        raise HTTPException(status_code=400, detail="access_token is required.")
-
-    try:
-        content = drive_get_file_content(file_id, access_token, refresh_token)
-        return Response(content=content, media_type="text/markdown")
-    except DriveError as e:
-        logger.error(f"Drive fetch failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.exception("Unexpected error in /drive/fetch")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-@app.post("/drive/clear")
-async def clear_vault(request: DriveTokenRequest):
-    try:
-        drive_clear_vault_files(request.access_token, request.refresh_token)
-        return {"status": "success", "message": "Vault cleared"}
-    except DriveError as e:
-        logger.error(f"Drive clear failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.exception("Unexpected error in /drive/clear")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@app.post("/drive/save")
-async def drive_save(request: DriveSaveRequest):
-    """Save a Markdown entry to the user's Google Drive VaultMCP folder."""
-    if not request.md_entry.strip():
-        raise HTTPException(status_code=400, detail="md_entry is empty.")
-    if not request.access_token.strip():
-        raise HTTPException(status_code=400, detail="Google Drive access token is required.")
-
-    try:
-        result = drive_save_to_drive(
-            md_entry=request.md_entry,
-            access_token=request.access_token,
-            refresh_token=request.refresh_token,
-            overwrite=request.overwrite,
-        )
-
-        return {
-            "status": "success",
-            "message": f"Entry {result.action} in Google Drive.",
-            "file_id": result.file_id,
-            "folder_id": result.folder_id,
-            "file_name": result.file_name,
-            "action": result.action,
-        }
-
-    except DriveAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Google Drive auth error: {e}")
-    except DriveError as e:
-        raise HTTPException(status_code=500, detail=f"Google Drive error: {e}")
-
-
-@app.get("/drive/vault")
-async def drive_get_vault_route(
-    access_token: str = Query(..., description="Google Drive OAuth access token"),
-    refresh_token: Optional[str] = Query(None, description="Google Drive OAuth refresh token"),
-):
-    """Fetch the full vault.md content from the user's Google Drive."""
-    if not access_token.strip():
-        raise HTTPException(status_code=400, detail="Google Drive access token is required.")
-
-    try:
-        vault_content = drive_get_vault(
-            access_token=access_token,
-            refresh_token=refresh_token,
-        )
-
-        if vault_content is None:
-            return {
-                "status": "empty",
-                "message": "No vault.md found in Google Drive. Save your first entry to create it.",
-                "content": None,
-            }
-
-        return {
-            "status": "success",
-            "content": vault_content,
-        }
-
-    except DriveAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Google Drive auth error: {e}")
-    except DriveError as e:
-        raise HTTPException(status_code=500, detail=f"Google Drive error: {e}")
-
-
-@app.post("/config/save")
-async def config_save(request: ConfigSaveRequest):
-    """Save user configuration to Google Drive."""
-    if not request.access_token.strip():
-        raise HTTPException(status_code=400, detail="Google Drive access token is required.")
-
-    config = {
-        "hf_token": request.hf_token,
-        "display_name": request.display_name,
-    }
-    
-    try:
-        drive_save_user_config(config, request.access_token, request.refresh_token)
-        return {"status": "success", "message": "Config saved to Google Drive."}
-    except DriveAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Google Drive auth error: {e}")
-    except DriveError as e:
-        raise HTTPException(status_code=500, detail=f"Google Drive error: {e}")
-
-
-@app.get("/config/load")
-async def config_load(
-    access_token: str = Query(..., description="Google Drive OAuth access token"),
-    refresh_token: Optional[str] = Query(None, description="Google Drive OAuth refresh token"),
-):
-    """Load user configuration from Google Drive."""
-    if not access_token.strip():
-        raise HTTPException(status_code=400, detail="Google Drive access token is required.")
-        
-    try:
-        config = drive_get_user_config(access_token, refresh_token)
-        if config is None:
-            return {"status": "empty", "config": {}}
-        return {"status": "success", "config": config}
-    except DriveAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Google Drive auth error: {e}")
-    except DriveError as e:
-        raise HTTPException(status_code=500, detail=f"Google Drive error: {e}")
-
-
-# ─── Auth Routes ─────────────────────────────────────────────────────────────
-
-@app.get("/auth/url")
-async def auth_get_url():
-    """Get the Google OAuth consent URL for the user to visit."""
-    try:
-        url = drive_get_auth_url()
-        return {"status": "success", "auth_url": url}
-    except DriveAuthError as e:
-        raise HTTPException(status_code=500, detail=f"OAuth config error: {e}")
-
-
-@app.post("/auth/google")
-async def auth_google(request: DriveAuthRequest):
-    """Exchange a Google OAuth authorization code for access + refresh tokens."""
-    if not request.auth_code.strip():
-        raise HTTPException(status_code=400, detail="Auth code is empty.")
-
-    try:
-        tokens = drive_auth_google(request.auth_code)
-
-        return {
-            "status": "success",
-            "tokens": {
-                "access_token": tokens.access_token,
-                "refresh_token": tokens.refresh_token,
-                "expires_in": tokens.expires_in,
-            },
-        }
-
-    except DriveAuthError as e:
-        raise HTTPException(status_code=401, detail=f"OAuth exchange failed: {e}")
-
-
-# ─── MCP Routes ──────────────────────────────────────────────────────────────
-
-def parse_vault_md(md_content: str) -> list:
-    """Parses a vault.md file contents into a list of structured entries."""
-    items = []
-    if not md_content:
-        return items
-
-    sections = re.split(r"^###\s+", md_content, flags=re.MULTILINE)
-    
-    for i in range(1, len(sections)):
-        section = sections[i]
-        lines = section.strip().split("\n")
-        if not lines:
-            continue
-        title = lines[0].strip()
-        
-        summary = ""
-        official_link = ""
-        source_url = ""
-        tools_mentioned = []
-        saved_on = ""
-        
-        for line in lines[1:]:
-            trimmed = line.strip()
-            if trimmed.startswith("- Summary:"):
-                summary = trimmed[len("- Summary:"):].strip()
-            elif trimmed.startswith("- Official link:"):
-                official_link = trimmed[len("- Official link:"):].strip()
-                if official_link == "N/A":
-                    official_link = ""
-            elif trimmed.startswith("- Source:"):
-                source_url = trimmed[len("- Source:"):].strip()
-            elif trimmed.startswith("- Tools mentioned:"):
-                tools_str = trimmed[len("- Tools mentioned:"):].strip()
-                tools_mentioned = [t.strip() for t in tools_str.split(",") if t.strip()]
-            elif trimmed.startswith("- Saved on:"):
-                saved_on = trimmed[len("- Saved on:"):].strip()
-                
-        above_content = md_content.split(f"### {title}")[0]
-        cat_matches = re.findall(r"##\s+\[CATEGORY:\s*(.+?)\]", above_content)
-        category = cat_matches[-1].strip() if cat_matches else "Other"
-        
-        items.append({
-            "title": title,
-            "category": category,
-            "summary": summary,
-            "official_link": official_link,
-            "source_url": source_url,
-            "tools_mentioned": tools_mentioned,
-            "saved_on": saved_on
-        })
-        
-    return items
-
-
-@app.get("/mcp/vault")
-async def mcp_get_vault(
-    x_drive_token: Optional[str] = Header(None, alias="X-Drive-Token")
-):
-    """Returns the full vault.md contents as plain text."""
-    if not x_drive_token or not x_drive_token.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Google Drive access token is required in X-Drive-Token header."
-        )
-
-    try:
-        vault_content = drive_get_vault(
-            access_token=x_drive_token,
-            refresh_token=None,
-        )
-
-        if vault_content is None:
-            # Fallback to standard empty vault if not created yet
-            vault_content = "# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n"
-
-        return Response(content=vault_content, media_type="text/plain")
-
-    except DriveAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Google Drive auth error: {e}")
-    except DriveError as e:
-        raise HTTPException(status_code=500, detail=f"Google Drive error: {e}")
-
-
-@app.get("/mcp/search")
-async def mcp_search_vault(
-    q: str = Query(..., description="Keyword query to search for"),
-    x_drive_token: Optional[str] = Header(None, alias="X-Drive-Token")
-):
-    """Searches vault.md for matching entries by keyword and returns them as a JSON array."""
-    if not x_drive_token or not x_drive_token.strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Google Drive access token is required in X-Drive-Token header."
-        )
-
-    try:
-        vault_content = drive_get_vault(
-            access_token=x_drive_token,
-            refresh_token=None,
-        )
-
-        if not vault_content:
-            return []
-
-        entries = parse_vault_md(vault_content)
-        query = q.strip().lower()
-        results = []
-
-        for entry in entries:
-            title = entry.get("title", "").lower()
-            category = entry.get("category", "").lower()
-            summary = entry.get("summary", "").lower()
-            tools = [t.lower() for t in entry.get("tools_mentioned", [])]
-
-            if (query in title or 
-                query in category or 
-                query in summary or 
-                any(query in t for t in tools)):
-                results.append(entry)
-
-        return results
-
-    except DriveAuthError as e:
-        raise HTTPException(status_code=401, detail=f"Google Drive auth error: {e}")
-    except DriveError as e:
-        raise HTTPException(status_code=500, detail=f"Google Drive error: {e}")
-
-
-# ─── MCP Protocol Endpoints ──────────────────────────────────────────────────
-
-@app.get("/.well-known/mcp.json")
-async def mcp_manifest():
-    return {
-        "name": "VaultMCP",
-        "version": "1.0",
-        "description": "Personal knowledge vault — tools, prompts, links saved from the web",
-        "tools": [
-            {
-                "name": "get_vault",
-                "description": "Get the full vault of saved tools, prompts, and resources",
-                "endpoint": "/mcp/vault",
-                "method": "GET"
-            },
-            {
-                "name": "search_vault",
-                "description": "Search vault for tools and resources relevant to a query",
-                "endpoint": "/mcp/search",
-                "method": "GET",
-                "parameters": {
-                    "q": "search query string"
-                }
-            },
-            {
-                "name": "compare_project",
-                "description": "Compare a project README with vault to find relevant tools",
-                "endpoint": "/mcp/compare",
-                "method": "POST"
-            }
-        ]
-    }
+# ─── MCP Protocol & Agent Endpoints ────────────────────────────────────────
+
+class MCPCompareRequest(BaseModel):
+    project_readme: str
+    drive_token: str  # Actually contains Firebase UID now
+    hf_token: Optional[str] = None
 
 @app.post("/mcp/compare")
 async def mcp_compare(request: MCPCompareRequest):
@@ -1043,27 +492,52 @@ async def mcp_compare(request: MCPCompareRequest):
 
 from mcp.server.fastmcp import FastMCP
 
+async def get_vault_from_firestore(uid: str) -> str:
+    url = f"https://firestore.googleapis.com/v1/projects/vaultmcp-4431d/databases/(default)/documents/users/{uid}"
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url)
+        if resp.status_code == 200:
+            data = resp.json()
+            try:
+                items = data.get("fields", {}).get("vaultItems", {}).get("arrayValue", {}).get("values", [])
+                md = "# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n\n---\n\n"
+                for item in items:
+                    fields = item.get("mapValue", {}).get("fields", {})
+                    title = fields.get("title", {}).get("stringValue", "")
+                    category = fields.get("category", {}).get("stringValue", "")
+                    date = fields.get("date", {}).get("stringValue", "")
+                    summary = fields.get("summary", {}).get("stringValue", "")
+                    exactPrompt = fields.get("exactPrompt", {}).get("stringValue", "")
+                    md += f"## [CATEGORY: {category}]\n\n### {title}\n"
+                    if summary:
+                        md += f"- Summary: {summary}\n"
+                    if exactPrompt:
+                        md += f"- Exact Prompt: {exactPrompt}\n"
+                    md += f"- Saved on: {date}\n\n"
+                return md
+            except Exception as e:
+                return f"Error parsing vault data: {e}"
+        return "Vault is empty or missing."
+
 # Create MCP server
 mcp_server = FastMCP("VaultMCP")
 
 @mcp_server.tool()
 async def get_vault() -> str:
     """Get the full VaultMCP knowledge base"""
-    uid = drive_token_var.get()
-    if not uid:
-        return \"Error: Missing X-Drive-Token header (Firebase UID)\"
-    import asyncio
-    content = asyncio.run(get_vault_from_firestore(uid))
+    token = drive_token_var.get()
+    if not token:
+        return "Error: Missing X-Drive-Token header"
+    content = drive_get_vault(token)
     return content or "Vault is empty"
 
 @mcp_server.tool()
 async def search_vault(query: str) -> str:
     """Search vault for tools and resources matching a query"""
-    uid = drive_token_var.get()
-    if not uid:
-        return \"Error: Missing X-Drive-Token header (Firebase UID)\"
-    import asyncio
-    content = asyncio.run(get_vault_from_firestore(uid))
+    token = drive_token_var.get()
+    if not token:
+        return "Error: Missing X-Drive-Token header"
+    content = drive_get_vault(token)
     if not content:
         return "Vault is empty"
     lines = content.split('\n')
@@ -1107,47 +581,7 @@ app.mount("/mcp", mcp_server.sse_app())
 
 if __name__ == "__main__":
     import uvicorn
-
-async def get_vault_from_firestore(uid: str) -> str:
-    url = f"https://firestore.googleapis.com/v1/projects/vaultmcp-4431d/databases/(default)/documents/users/{uid}"
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(url)
-        if resp.status_code == 200:
-            data = resp.json()
-            try:
-                items = data.get("fields", {}).get("vaultItems", {}).get("arrayValue", {}).get("values", [])
-                md = "# VaultMCP Vault
-
-> Save what you scroll. Use what you saved.
-
----
-
-"
-                for item in items:
-                    fields = item.get("mapValue", {}).get("fields", {})
-                    title = fields.get("title", {}).get("stringValue", "")
-                    category = fields.get("category", {}).get("stringValue", "")
-                    date = fields.get("date", {}).get("stringValue", "")
-                    summary = fields.get("summary", {}).get("stringValue", "")
-                    exactPrompt = fields.get("exactPrompt", {}).get("stringValue", "")
-                    md += f"## [CATEGORY: {category}]
-
-### {title}
-"
-                    if summary:
-                        md += f"- Summary: {summary}
-"
-                    if exactPrompt:
-                        md += f"- Exact Prompt: {exactPrompt}
-"
-                    md += f"- Saved on: {date}
-
-"
-                return md
-            except Exception as e:
-                return f"Error parsing vault data: {e}"
-        return "Vault is empty or missing."
-
+    import httpx
 
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
