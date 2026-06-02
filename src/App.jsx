@@ -354,13 +354,18 @@ export default function App() {
   };
 
   const handleClearVault = async () => {
-    if (user.uid) {
-      const docRef = doc(db, 'users', user.uid);
-      await setDoc(docRef, { vaultItems: [] }, { merge: true });
-    }
     setVaultItems([]);
-    setMessages(INITIAL_MESSAGES);
+    setMessages([ ...INITIAL_MESSAGES ]);
     showToast('Vault and chat history cleared', 'success');
+
+    if (user.uid) {
+      try {
+        const docRef = doc(db, 'users', user.uid);
+        await setDoc(docRef, { vaultItems: [] }, { merge: true });
+      } catch (err) {
+        console.error("Failed to clear vault remotely", err);
+      }
+    }
   };
 
   const handleLogout = () => {
