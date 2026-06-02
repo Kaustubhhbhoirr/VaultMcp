@@ -51,9 +51,18 @@ from md_generator import (
     VaultEntry,
 )
 
+import fitz
+import docx
+import openpyxl
+import pptx
+import io
+
+
+
 # ─── Load Environment ────────────────────────────────────────────────────────
 load_dotenv()
 
+import contextvars
 drive_token_var = contextvars.ContextVar("drive_token", default=None)
 
 CORS_ORIGINS = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000,https://vault-mcp-4ssi.vercel.app").split(",")
@@ -99,10 +108,42 @@ class ProcessRequest(BaseModel):
     force_category: Optional[str] = None  # User overridden category
 
 
+class DriveAuthRequest(BaseModel):
+    """Body for POST /auth/google."""
+    auth_code: str
+
+
+class DriveTokenRequest(BaseModel):
+    """Body containing just tokens."""
+    access_token: str
+    refresh_token: Optional[str] = None
+
+
+class DriveSaveRequest(BaseModel):
+    """Body for POST /drive/save."""
+    md_entry: str                          # Pre-generated MD string from /process
+    access_token: str                      # User's Google Drive OAuth token
+    refresh_token: Optional[str] = None
+    overwrite: Optional[bool] = False
+
+
+class DriveVaultRequest(BaseModel):
+    """Query params for GET /drive/vault."""
+    pass
+
+
+class ConfigSaveRequest(BaseModel):
+    """Body for POST /config/save."""
+    access_token: str
+    refresh_token: Optional[str] = None
+    hf_token: Optional[str] = ""
+    display_name: Optional[str] = ""
+
+
 class MCPCompareRequest(BaseModel):
     project_readme: str
-    drive_token: str  # Actually contains Firebase UID now
-    hf_token: Optional[str] = None
+    drive_token: str
+    hf_token: str
 
 
 # ─── URL Detection Helpers ──────────────────────────────────────────────────
@@ -133,6 +174,36 @@ def detect_input_type(content: str) -> str:
 
     logger.info("[detect_input_type] Match found: text (default fallback)")
     return "text"
+
+
+def detect_category(input_type: str, url: str, ai_category: str) -> str:
+    """Override AI category with rule-based detection."""
+    
+    # GitHub repos always = Dev Tools
+    if input_type == "github":
+        return "Dev Tools"
+    
+    # Known AI tool domains
+    ai_domains = ["openai.com", "anthropic.com", "huggingface.co", 
+                  "midjourney.com", "perplexity.ai", "claude.ai",
+                  "gemini.google.com", "cursor.sh", "replicate.com"]
+    if any(domain in url for domain in ai_domains):
+        return "AI Tools"
+    
+    # Design/UI domains
+    design_domains = ["dribbble.com", "figma.com", "behance.net", 
+                      "awwwards.com", "tailwindcss.com", "shadcn"]
+    if any(domain in url for domain in design_domains):
+        return "Design"
+    
+    # Plain text with prompt keywords = Prompts
+    prompt_keywords = ["prompt", "system prompt", "instruction", "act as", "you are a"]
+    if input_type == "text" and any(kw in url.lower() for kw in prompt_keywords):
+        return "Prompts"
+    
+    # Fall back to AI category if it's valid
+    valid = ["AI Tools", "Dev Tools", "Prompts", "Design", "Resources", "Other"]
+    return ai_category if ai_category in valid else "Resources"
 
 
 # ─── Website Scraper (lightweight) ──────────────────────────────────────────
@@ -291,6 +362,7 @@ async def health_check():
             "ai_processor": "ready",
             "web_searcher": "ready",
             "md_generator": "ready",
+            "drive_handler": "ready",
         },
     }
 
@@ -452,12 +524,172 @@ async def process_content(request: ProcessRequest):
         "input_type": input_type,
     }
 
-# ─── MCP Protocol & Agent Endpoints ────────────────────────────────────────
 
-class MCPCompareRequest(BaseModel):
-    project_readme: str
-    drive_token: str  # Actually contains Firebase UID now
-    hf_token: Optional[str] = None
+def extract_text_from_file(raw_bytes: bytes, filename: str) -> str:
+    """Extract text content from various file formats and format as Markdown."""
+    ext = filename.lower().split('.')[-1] if '.' in filename else ''
+    
+    try:
+        if ext == 'pdf':
+            doc = fitz.open(stream=raw_bytes, filetype="pdf")
+            extracted = "\n".join([page.get_text() for page in doc])
+            return f"# Document Title\n> Converted from {filename} by VaultMCP\n\n---\n\n{extracted}"
+            
+        elif ext == 'docx':
+            doc = docx.Document(io.BytesIO(raw_bytes))
+            parts = []
+            for p in doc.paragraphs:
+                if p.style.name.startswith('Heading'):
+                    level = p.style.name.replace('Heading', '').strip()
+                    try:
+                        level_num = int(level)
+                        parts.append(f"{'#' * level_num} {p.text}")
+                    except ValueError:
+                        parts.append(f"# {p.text}")
+                else:
+                    parts.append(p.text)
+            extracted = "\n".join(parts)
+            return f"# Document Title\n> Converted from {filename} by VaultMCP\n\n---\n\n{extracted}"
+            
+        elif ext == 'xlsx':
+            wb = openpyxl.load_workbook(io.BytesIO(raw_bytes), data_only=True)
+            parts = [f"# Spreadsheet: {filename}\n> Converted by VaultMCP\n"]
+            for i, sheet in enumerate(wb.worksheets, 1):
+                parts.append(f"## Sheet {i}: {sheet.title}")
+                rows = list(sheet.iter_rows(values_only=True))
+                if not rows:
+                    parts.append("")
+                    continue
+                # Header
+                header = rows[0]
+                parts.append("| " + " | ".join([str(v) if v is not None else "" for v in header]) + " |")
+                parts.append("|" + "|".join(["---" for _ in header]) + "|")
+                # Rows
+                for row in rows[1:]:
+                    parts.append("| " + " | ".join([str(v) if v is not None else "" for v in row]) + " |")
+                parts.append("")
+            return "\n".join(parts)
+            
+        elif ext == 'pptx':
+            prs = pptx.Presentation(io.BytesIO(raw_bytes))
+            parts = [f"# Presentation: {filename}\n> Converted by VaultMCP\n"]
+            for i, slide in enumerate(prs.slides, 1):
+                parts.append(f"## Slide {i}")
+                for shape in slide.shapes:
+                    if hasattr(shape, "text") and shape.text.strip():
+                        parts.append(shape.text)
+                parts.append("")
+            return "\n".join(parts)
+            
+    except Exception as e:
+        logger.error(f"Failed to parse {ext} file: {e}")
+        pass
+
+    # Fallback for plain text, unknown types, or failed parsing
+    text = raw_bytes.decode("utf-8", errors="replace")
+    return f"# Document: {filename}\n> Converted by VaultMCP\n\n---\n\n{text}"
+
+
+
+@app.post("/process/file")
+async def process_file(
+    file: UploadFile = File(...),
+    hf_token: str = Form(...),
+    drive_access_token: Optional[str] = Form(None),
+    drive_refresh_token: Optional[str] = Form(None),
+):
+    """
+    Process an uploaded file (PDF, text, etc.).
+    Reads file content as text and runs through the AI pipeline.
+    """
+    if not hf_token or not hf_token.strip():
+        raise HTTPException(status_code=400, detail="Hugging Face token is required.")
+
+    try:
+        raw_bytes = await file.read()
+        text_content = extract_text_from_file(raw_bytes, file.filename)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read file: {e}")
+
+    if not text_content.strip():
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    md_file_link = ""
+
+    # Prepend filename for context
+    text_for_ai = f"File: {file.filename}\n\n{text_content[:8000]}"
+
+    # Run through the same AI pipeline
+    try:
+        processed = process_text(text_for_ai, hf_token.strip())
+        processed_dict = result_to_dict(processed)
+    except AIInvalidTokenError as e:
+        raise HTTPException(status_code=401, detail=f"HF token error: {e}")
+    except ProcessingError as e:
+        raise HTTPException(status_code=422, detail=f"AI processing failed: {e}")
+
+    official_info = get_official_info(processed.official_link)
+    official_link = official_info.get("official_link", "")
+
+    entry = build_entry(
+        processed=processed_dict,
+        source_url=f"uploaded file ({file.filename})",
+        official_link=official_link,
+        md_file_link=md_file_link,
+    )
+    md_entry = generate_entry_md(entry)
+
+    return {
+        "status": "success",
+        "result": {
+            "title": processed.title,
+            "category": processed.category,
+            "summary": processed.summary,
+            "official_link": official_link,
+            "source_url": "",
+            "tools_mentioned": processed.tools_mentioned,
+            "links_mentioned": processed.links_mentioned,
+            "md_entry": md_entry,
+            "saved_on": format_retro_date(datetime.utcnow()),
+        },
+        "input_type": "file",
+        "filename": file.filename,
+        "md_file_link": md_file_link,
+    }
+
+
+# ─── MCP Protocol Endpoints ──────────────────────────────────────────────────
+
+@app.get("/.well-known/mcp.json")
+async def mcp_manifest():
+    return {
+        "name": "VaultMCP",
+        "version": "1.0",
+        "description": "Personal knowledge vault — tools, prompts, links saved from the web",
+        "tools": [
+            {
+                "name": "get_vault",
+                "description": "Get the full vault of saved tools, prompts, and resources",
+                "endpoint": "/mcp/vault",
+                "method": "GET"
+            },
+            {
+                "name": "search_vault",
+                "description": "Search vault for tools and resources relevant to a query",
+                "endpoint": "/mcp/search",
+                "method": "GET",
+                "parameters": {
+                    "q": "search query string"
+                }
+            },
+            {
+                "name": "compare_project",
+                "description": "Compare a project README with vault to find relevant tools",
+                "endpoint": "/mcp/compare",
+                "method": "POST"
+            }
+        ]
+    }
 
 @app.post("/mcp/compare")
 async def mcp_compare(request: MCPCompareRequest):
@@ -467,7 +699,7 @@ async def mcp_compare(request: MCPCompareRequest):
     Returns ranked list of relevant tools.
     """
     project_readme = request.project_readme
-    firebase_uid = request.drive_token  # Using drive_token field to carry Firebase UID for backwards compatibility
+    firebase_uid = request.drive_token  # Using drive_token field for Firebase UID
     
     # Fetch full vault
     vault_content = await get_vault_from_firestore(firebase_uid)
@@ -492,6 +724,7 @@ async def mcp_compare(request: MCPCompareRequest):
 
 from mcp.server.fastmcp import FastMCP
 
+import httpx
 async def get_vault_from_firestore(uid: str) -> str:
     url = f"https://firestore.googleapis.com/v1/projects/vaultmcp-4431d/databases/(default)/documents/users/{uid}"
     async with httpx.AsyncClient() as client:
@@ -519,25 +752,55 @@ async def get_vault_from_firestore(uid: str) -> str:
                 return f"Error parsing vault data: {e}"
         return "Vault is empty or missing."
 
+
+import httpx
+async def get_vault_from_firestore(uid: str) -> str:
+    url = f"https://firestore.googleapis.com/v1/projects/vaultmcp-4431d/databases/(default)/documents/users/{uid}"
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url)
+        if resp.status_code == 200:
+            data = resp.json()
+            try:
+                items = data.get("fields", {}).get("vaultItems", {}).get("arrayValue", {}).get("values", [])
+                md = "# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n\n---\n\n"
+                for item in items:
+                    fields = item.get("mapValue", {}).get("fields", {})
+                    title = fields.get("title", {}).get("stringValue", "")
+                    category = fields.get("category", {}).get("stringValue", "")
+                    date = fields.get("date", {}).get("stringValue", "")
+                    summary = fields.get("summary", {}).get("stringValue", "")
+                    exactPrompt = fields.get("exactPrompt", {}).get("stringValue", "")
+                    md += f"## [CATEGORY: {category}]\n\n### {title}\n"
+                    if summary:
+                        md += f"- Summary: {summary}\n"
+                    if exactPrompt:
+                        md += f"- Exact Prompt: {exactPrompt}\n"
+                    md += f"- Saved on: {date}\n\n"
+                return md
+            except Exception as e:
+                return f"Error parsing vault data: {e}"
+        return "Vault is empty or missing."
+
+
 # Create MCP server
 mcp_server = FastMCP("VaultMCP")
 
 @mcp_server.tool()
 async def get_vault() -> str:
     """Get the full VaultMCP knowledge base"""
-    token = drive_token_var.get()
-    if not token:
-        return "Error: Missing X-Drive-Token header"
-    content = drive_get_vault(token)
+    uid = drive_token_var.get()
+    if not uid:
+        return "Error: Missing X-Drive-Token header (Firebase UID)"
+    content = await get_vault_from_firestore(uid)
     return content or "Vault is empty"
 
 @mcp_server.tool()
 async def search_vault(query: str) -> str:
     """Search vault for tools and resources matching a query"""
-    token = drive_token_var.get()
-    if not token:
-        return "Error: Missing X-Drive-Token header"
-    content = drive_get_vault(token)
+    uid = drive_token_var.get()
+    if not uid:
+        return "Error: Missing X-Drive-Token header (Firebase UID)"
+    content = await get_vault_from_firestore(uid)
     if not content:
         return "Vault is empty"
     lines = content.split('\n')
@@ -547,10 +810,10 @@ async def search_vault(query: str) -> str:
 @mcp_server.tool()
 async def compare_project(project_readme: str) -> str:
     """Compare project README with vault to find relevant tools"""
-    token = drive_token_var.get()
-    if not token:
-        return "Error: Missing X-Drive-Token header"
-    vault_content = drive_get_vault(token)
+    uid = drive_token_var.get()
+    if not uid:
+        return "Error: Missing X-Drive-Token header (Firebase UID)"
+    vault_content = await get_vault_from_firestore(uid)
     if not vault_content:
         return "Your Vault is currently empty! Add some tools to your VaultMCP first before running the comparison."
     
@@ -581,7 +844,6 @@ app.mount("/mcp", mcp_server.sse_app())
 
 if __name__ == "__main__":
     import uvicorn
-    import httpx
 
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
