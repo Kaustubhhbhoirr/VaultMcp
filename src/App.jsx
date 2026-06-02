@@ -196,7 +196,7 @@ export default function App() {
         text: errMsg,
       } : m));
     }
-  }, [user.hfToken, user.isDriveConnected, user.driveAccessToken, user.driveRefreshToken, setMessages, setVaultItems]);
+  }, [user.hfToken, setMessages, setVaultItems]);
 
   const handleSendFile = useCallback(async (file) => {
     const hfToken = user.hfToken;
@@ -235,8 +235,8 @@ export default function App() {
       const response = await processFile(
         file, 
         hfToken, 
-        user.isDriveConnected ? user.driveAccessToken : null, 
-        user.isDriveConnected ? user.driveRefreshToken : null
+        null, 
+        null
       );
       const result = response.result;
 
@@ -266,14 +266,7 @@ export default function App() {
       };
       setVaultItems(prev => [newVaultItem, ...prev]);
 
-      // Auto-save to Vault
-      if (user.isDriveConnected && user.driveAccessToken && result.md_entry) {
-        try {
-          await saveToDrive(result.md_entry, user.driveAccessToken, user.driveRefreshToken);
-        } catch {
-          // Non-blocking
-        }
-      }
+
 
     } catch (err) {
       let errMsg = "● Could not process this. Try again or paste as plain text";
@@ -289,7 +282,7 @@ export default function App() {
         text: errMsg,
       } : m));
     }
-  }, [user.hfToken, user.isDriveConnected, user.driveAccessToken, user.driveRefreshToken, setMessages, setVaultItems]);
+  }, [user.hfToken, setMessages, setVaultItems]);
 
   // Parse share target options on load
   useEffect(() => {
@@ -322,204 +315,6 @@ export default function App() {
       }
     }
   }, [user.name, user.hfToken, handleSendMessage]);
-
-  // ─── Fetch vault ───────────────
-  const fetchVaultFromDrive = useCallback(async () => {
-    if (!user.driveAccessToken) return;
-
-    try {
-      const response = await getVaultFromDrive(user.driveAccessToken, user.driveRefreshToken);
-
-      if (response.status === 'success' && response.content) {
-        // Parse vault.md content into structured items
-        const items = parseVaultMd(response.content);
-        setVaultItems(items);
-        return items.length;
-      }
-    } catch {
-      // Silently fail — vault was fetched from cache
-    }
-    return 0;
-  }, [user.driveAccessToken, user.driveRefreshToken, setVaultItems]);
-
-  // ─── Auto-sync vault on app load ──────────
-  useEffect(() => {
-    if (user.isDriveConnected && user.driveAccessToken) {
-      fetchVaultFromDrive();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user.isDriveConnected]);
-
-  // ─── Manual sync ─────────────────────────
-  const handleSyncFromDrive = useCallback(async () => {
-    if (!user.driveAccessToken) {
-      setMessages(prev => [...prev, {
-        sender: 'system',
-        isError: true,
-        text: '● ERROR — Sync failed.',
-      }]);
-      return;
-    }
-    try {
-      const count = await fetchVaultFromDrive();
-      showToast(`Vault synced — ${count} entries restored`, 'success');
-    } catch {
-      showToast('Sync failed.', 'error');
-    }
-  }, [fetchVaultFromDrive, user.driveAccessToken, showToast, setMessages]);
-
-  useEffect(() => {
-    if (activeTab === 'vault') {
-      fetchVaultFromDrive();
-    }
-  }, [activeTab, fetchVaultFromDrive]);
-
-  // ─── Google Drive OAuth ───────────────────────────────────────────────
-  const handleConnectDrive = async () => {
-    try {
-      const authUrl = await getGoogleAuthUrl();
-      const popup = window.open(authUrl, 'google-oauth', 'width=500,height=600');
-      let isExchanged = false;
-
-      window.addEventListener('message', async (event) => {
-        if (event.origin !== window.location.origin) return;
-
-        if (event.data && event.data.type === 'GOOGLE_AUTH_SUCCESS') {
-          if (isExchanged) return;
-          isExchanged = true;
-          const authCode = event.data.code;
-
-          try {
-            const tokens = await exchangeGoogleAuthCode(authCode);
-            
-            try {
-              setTimeout(async () => {
-                const configRes = await getUserConfig(tokens.access_token, tokens.refresh_token);
-                console.log('Config load result:', configRes);
-                console.log('HF token restored:', configRes?.config?.hf_token ? 'YES' : 'NO');
-                setUser(prev => {
-                  const conf = (configRes.status === 'success' && configRes.config) ? configRes.config : {};
-                  const newUser = {
-                    ...prev,
-                    isDriveConnected: true,
-                    driveAccessToken: tokens.access_token,
-                    driveRefreshToken: tokens.refresh_token || '',
-                    hfToken: conf.hf_token || prev.hfToken,
-                    name: conf.display_name || prev.name,
-                  };
-                  console.log('Saving config to Drive:', { hfToken: newUser.hfToken, name: newUser.name });
-                  saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
-                  return newUser;
-                });
-              }, 2000);
-            } catch (configErr) {
-              console.error("Config restore failed", configErr);
-              setUser(prev => ({
-                ...prev,
-                isDriveConnected: true,
-                driveAccessToken: tokens.access_token,
-                driveRefreshToken: tokens.refresh_token || '',
-              }));
-            }
-            
-            showToast("Google Drive authorized successfully!", "success");
-            if (popup) popup.close();
-            // Auto-restore vault after connecting
-            const count = await fetchVaultFromDrive();
-            if (count > 0) {
-              setMessages(prev => [...prev, {
-                sender: 'system',
-                text: `● VAULT RESTORED — ${count} entries loaded from Drive`,
-              }]);
-            }
-          } catch (err) {
-            setMessages(prev => [...prev, {
-              sender: 'system',
-              isError: true,
-              text: '● Drive connection expired. Go to Settings → Reconnect Drive',
-            }]);
-          }
-        } else if (event.data && event.data.type === 'GOOGLE_AUTH_ERROR') {
-          setMessages(prev => [...prev, {
-            sender: 'system',
-            isError: true,
-            text: '● Drive connection expired. Go to Settings → Reconnect Drive',
-          }]);
-          if (popup) popup.close();
-        }
-      }, { once: true });
-
-      // Bulletproof fallback: BroadcastChannel works even if window.opener is stripped
-      const authChannel = new BroadcastChannel('google_oauth_channel');
-      authChannel.onmessage = async (event) => {
-        if (event.data && event.data.type === 'GOOGLE_AUTH_SUCCESS') {
-          if (isExchanged) {
-            authChannel.close();
-            return;
-          }
-          isExchanged = true;
-          const authCode = event.data.code;
-          authChannel.close();
-          try {
-            const tokens = await exchangeGoogleAuthCode(authCode);
-            
-            try {
-              setTimeout(async () => {
-                const configRes = await getUserConfig(tokens.access_token, tokens.refresh_token);
-                console.log('Config load result:', configRes);
-                console.log('HF token restored:', configRes?.config?.hf_token ? 'YES' : 'NO');
-                setUser(prev => {
-                  const conf = (configRes.status === 'success' && configRes.config) ? configRes.config : {};
-                  const newUser = {
-                    ...prev,
-                    isDriveConnected: true,
-                    driveAccessToken: tokens.access_token,
-                    driveRefreshToken: tokens.refresh_token || '',
-                    hfToken: conf.hf_token || prev.hfToken,
-                    name: conf.display_name || prev.name,
-                  };
-                  console.log('Saving config to Drive:', { hfToken: newUser.hfToken, name: newUser.name });
-                  saveUserConfig(newUser.hfToken, newUser.name, newUser.driveAccessToken, newUser.driveRefreshToken).catch(console.error);
-                  return newUser;
-                });
-              }, 2000);
-            } catch (configErr) {
-              console.error("Config restore failed", configErr);
-              setUser(prev => ({
-                ...prev,
-                isDriveConnected: true,
-                driveAccessToken: tokens.access_token,
-                driveRefreshToken: tokens.refresh_token || '',
-              }));
-            }
-            showToast("Google Drive authorized successfully!", "success");
-            if (popup) popup.close();
-            // Auto-restore vault after connecting (BroadcastChannel path)
-            const count = await fetchVaultFromDrive();
-            if (count > 0) {
-              setMessages(prev => [...prev, {
-                sender: 'system',
-                text: `● VAULT RESTORED — ${count} entries loaded from Drive`,
-              }]);
-            }
-          } catch (err) {
-            setMessages(prev => [...prev, { sender: 'system', isError: true, text: '● Drive connection expired. Go to Settings → Reconnect Drive' }]);
-          }
-        } else if (event.data && event.data.type === 'GOOGLE_AUTH_ERROR') {
-          authChannel.close();
-          setMessages(prev => [...prev, { sender: 'system', isError: true, text: '● Drive connection expired. Go to Settings → Reconnect Drive' }]);
-          if (popup) popup.close();
-        }
-      };
-
-    } catch (err) {
-      setMessages(prev => [...prev, {
-        sender: 'system',
-        isError: true,
-        text: '● Drive connection expired. Go to Settings → Reconnect Drive',
-      }]);
-    }
-  };
 
   const handleOnboardingComplete = (userData) => {
     setUser(prev => {
