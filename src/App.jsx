@@ -385,11 +385,14 @@ export default function App() {
     try {
       const authUrl = await getGoogleAuthUrl();
       const popup = window.open(authUrl, 'google-oauth', 'width=500,height=600');
+      let isExchanged = false;
 
       window.addEventListener('message', async (event) => {
         if (event.origin !== window.location.origin) return;
 
         if (event.data && event.data.type === 'GOOGLE_AUTH_SUCCESS') {
+          if (isExchanged) return;
+          isExchanged = true;
           const authCode = event.data.code;
 
           try {
@@ -456,6 +459,11 @@ export default function App() {
       const authChannel = new BroadcastChannel('google_oauth_channel');
       authChannel.onmessage = async (event) => {
         if (event.data && event.data.type === 'GOOGLE_AUTH_SUCCESS') {
+          if (isExchanged) {
+            authChannel.close();
+            return;
+          }
+          isExchanged = true;
           const authCode = event.data.code;
           authChannel.close();
           try {
