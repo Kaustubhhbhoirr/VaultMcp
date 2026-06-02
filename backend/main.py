@@ -462,9 +462,8 @@ async def process_content(request: ProcessRequest):
         processed = process_text(text_for_ai, hf_token)
         # Bypassing AI categorization completely: rely purely on manual Slash Commands, default to "Other"
         final_category = request.force_category if request.force_category else "Other"
-        processed.category = final_category
-
         processed_dict = result_to_dict(processed)
+        processed_dict["category"] = final_category
         pipeline_steps.append({
             "step": 3, "name": "ai_structure", "status": "done",
             "detail": f"Category: {processed.category}, fallback: {processed.was_fallback}",
@@ -622,8 +621,8 @@ async def process_file(
     try:
         processed = process_text(text_for_ai, hf_token.strip())
         final_category = force_category if force_category else "Other"
-        processed.category = final_category
         processed_dict = result_to_dict(processed)
+        processed_dict["category"] = final_category
     except AIInvalidTokenError as e:
         raise HTTPException(status_code=401, detail=f"HF token error: {e}")
     except ProcessingError as e:
