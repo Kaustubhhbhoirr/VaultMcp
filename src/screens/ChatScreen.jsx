@@ -96,7 +96,7 @@ export default function ChatScreen({ messages, onSendMessage, onSendFile, shared
                     )}
 
                     {!msg.isExtracting && (
-                      <p>{msg.text}</p>
+                      <p className={msg.isError ? 'text-red-500 font-bold' : ''}>{msg.text}</p>
                     )}
                   </div>
                 </div>
