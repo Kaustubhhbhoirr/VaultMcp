@@ -458,12 +458,28 @@ async def process_content(request: ProcessRequest):
         })
 
     # ── Step 3: AI structuring (Mistral) ───────────────────────────────
+    final_category = request.force_category if request.force_category else "Other"
+    
     try:
-        processed = process_text(text_for_ai, hf_token)
-        # Bypassing AI categorization completely: rely purely on manual Slash Commands, default to "Other"
-        final_category = request.force_category if request.force_category else "Other"
-        processed_dict = result_to_dict(processed)
-        processed_dict["category"] = final_category
+        if final_category == "Prompts":
+            from ai_processor import ProcessedContent
+            title = text_for_ai[:40].replace('\n', ' ').strip() + ("..." if len(text_for_ai) > 40 else "")
+            
+            processed = ProcessedContent(
+                title=title if title else "Saved Prompt",
+                category="Prompts",
+                summary="User prompt saved verbatim. No AI summarization applied.",
+                official_link="",
+                tools_mentioned=[],
+                links_mentioned=[],
+                was_fallback=True
+            )
+            processed_dict = result_to_dict(processed)
+        else:
+            processed = process_text(text_for_ai, hf_token)
+            processed_dict = result_to_dict(processed)
+            processed_dict["category"] = final_category
+            
         pipeline_steps.append({
             "step": 3, "name": "ai_structure", "status": "done",
             "detail": f"Category: {processed.category}, fallback: {processed.was_fallback}",
