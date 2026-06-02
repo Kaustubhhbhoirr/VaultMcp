@@ -29,14 +29,14 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry, user
     setViewingItem(item);
     if (item.mdLink) {
       setLoadingMd(true);
-      setMdContent('Loading content from Google Drive...');
+      setMdContent('Loading content from Vault...');
       try {
         const match = item.mdLink.match(/\/d\/(.*?)\/view/);
         const fileId = match ? match[1] : null;
-        if (!fileId) throw new Error("Invalid Drive link");
+        if (!fileId) throw new Error("Invalid Source link");
 
-        const { fetchDriveFile } = await import('../utils/api.js');
-        const content = await fetchDriveFile(fileId, user?.driveAccessToken, user?.driveRefreshToken);
+        const { fetchSourceFile } = await import('../utils/api.js');
+        const content = await fetchSourceFile(fileId, );
         setMdContent(content);
       } catch (err) {
         setMdContent(`Failed to load markdown: ${err.message}`);
@@ -249,10 +249,10 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry, user
                               try {
                                 const match = item.mdLink.match(/\/d\/(.*?)\/view/);
                                 const fileId = match ? match[1] : null;
-                                if (!fileId) throw new Error("Invalid Drive link");
+                                if (!fileId) throw new Error("Invalid Source link");
 
-                                const { fetchDriveFile } = await import('../utils/api.js');
-                                const text = await fetchDriveFile(fileId, user?.driveAccessToken, user?.driveRefreshToken);
+                                const { fetchSourceFile } = await import('../utils/api.js');
+                                const text = await fetchSourceFile(fileId, );
 
                                 const blob = new Blob([text], { type: 'text/markdown' });
                                 const url = URL.createObjectURL(blob);

@@ -266,7 +266,7 @@ export default function App() {
       };
       setVaultItems(prev => [newVaultItem, ...prev]);
 
-      // Auto-save to Google Drive if connected
+      // Auto-save to Vault
       if (user.isDriveConnected && user.driveAccessToken && result.md_entry) {
         try {
           await saveToDrive(result.md_entry, user.driveAccessToken, user.driveRefreshToken);
@@ -323,7 +323,7 @@ export default function App() {
     }
   }, [user.name, user.hfToken, handleSendMessage]);
 
-  // ─── Fetch vault from Drive when switching to vault tab ───────────────
+  // ─── Fetch vault ───────────────
   const fetchVaultFromDrive = useCallback(async () => {
     if (!user.driveAccessToken) return;
 
@@ -342,7 +342,7 @@ export default function App() {
     return 0;
   }, [user.driveAccessToken, user.driveRefreshToken, setVaultItems]);
 
-  // ─── Auto-sync vault on app load when Drive already connected ──────────
+  // ─── Auto-sync vault on app load ──────────
   useEffect(() => {
     if (user.isDriveConnected && user.driveAccessToken) {
       fetchVaultFromDrive();
@@ -350,21 +350,21 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user.isDriveConnected]);
 
-  // ─── Manual sync from Drive (Settings button) ─────────────────────────
+  // ─── Manual sync ─────────────────────────
   const handleSyncFromDrive = useCallback(async () => {
     if (!user.driveAccessToken) {
       setMessages(prev => [...prev, {
         sender: 'system',
         isError: true,
-        text: '● ERROR — Google Drive not connected. Connect Drive first.',
+        text: '● ERROR — Sync failed.',
       }]);
       return;
     }
     try {
       const count = await fetchVaultFromDrive();
-      showToast(`Vault synced — ${count} entries restored from Drive`, 'success');
+      showToast(`Vault synced — ${count} entries restored`, 'success');
     } catch {
-      showToast('Sync failed. Check Drive connection.', 'error');
+      showToast('Sync failed.', 'error');
     }
   }, [fetchVaultFromDrive, user.driveAccessToken, showToast, setMessages]);
 

@@ -55,7 +55,7 @@ export default function OnboardingScreen({ onComplete }) {
             {/* Note Footer */}
             <div className="text-center mt-6">
               <p className="font-label-caps text-[10px] leading-relaxed text-on-surface-variant opacity-60">
-                Data is stored locally under your account.<br />Connect Google Drive later in Settings.
+                Data is securely stored in your personal Vault.
               </p>
             </div>
           </div>

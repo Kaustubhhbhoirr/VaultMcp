@@ -24,7 +24,7 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onLog
   const handleSaveToken = () => {
     onUpdateUser({ hfToken: tempToken });
     setIsTokenModalOpen(false);
-    showToast("● HF Token saved to Drive ✓", "success");
+    showToast("● HF Token saved to Firebase ✓", "success");
   };
 
   const handleClear = () => {
@@ -176,7 +176,7 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onLog
                 <div>~/.gemini/antigravity/mcp_config.json</div>
               </div>
               <div className="text-status-error font-bold mt-1">
-                ⚠️ Keep your Drive token private. Never share this config publicly.
+                ⚠️ Keep your Firebase UID private. Never share this config publicly.
               </div>
               <button 
                 onClick={() => {
@@ -189,7 +189,7 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onLog
                           "mcp-remote", 
                           "https://kaustubh5934-vaultmcp-backend.hf.space/mcp/sse",
                           "--header",
-                          "X-Drive-Token: YOUR_DRIVE_TOKEN"
+                          "X-Drive-Token: YOUR_FIREBASE_UID"
                         ]
                       }
                     }
