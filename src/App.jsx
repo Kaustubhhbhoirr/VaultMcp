@@ -182,9 +182,12 @@ export default function App() {
 
 
     } catch (err) {
-      let errMsg = "● Could not process this. Try again or paste as plain text";
+      let errMsg = err.message || "● Could not process this. Try again or paste as plain text";
       if (err.message && (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network'))) {
         errMsg = "● Connection failed. Check your internet and try again";
+      }
+      if (!errMsg.startsWith("● ")) {
+        errMsg = "● " + errMsg;
       }
       // Replace the processing message with an error
       setMessages(prev => prev.map(m => m.id === msgId ? {
@@ -284,9 +287,12 @@ export default function App() {
 
 
     } catch (err) {
-      let errMsg = "● Could not process this. Try again or paste as plain text";
+      let errMsg = err.message || "● Could not process this file. Try again.";
       if (err.message && (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network'))) {
         errMsg = "● Connection failed. Check your internet and try again";
+      }
+      if (!errMsg.startsWith("● ")) {
+        errMsg = "● " + errMsg;
       }
       setMessages(prev => prev.map(m => m.id === msgId ? {
         ...m,
