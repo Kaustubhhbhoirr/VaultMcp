@@ -495,7 +495,6 @@ async def process_content(request: ProcessRequest):
         processed=processed_dict,
         source_url=source_url,
         official_link=official_link,
-        exact_prompt=content if input_type == "text" else "",
     )
     md_entry = generate_entry_md(entry)
     saved_on = format_retro_date(datetime.utcnow())
@@ -509,7 +508,7 @@ async def process_content(request: ProcessRequest):
         "status": "success",
         "result": {
             "title": processed.title,
-            "category": processed.category,
+            "category": processed_dict["category"],
             "summary": processed.summary,
             "exact_prompt": content if input_type == "text" else "",
             "official_link": official_link,
@@ -635,7 +634,6 @@ async def process_file(
         processed=processed_dict,
         source_url=f"uploaded file ({file.filename})",
         official_link=official_link,
-        md_file_link=md_file_link,
     )
     md_entry = generate_entry_md(entry)
 
@@ -643,7 +641,7 @@ async def process_file(
         "status": "success",
         "result": {
             "title": processed.title,
-            "category": processed.category,
+            "category": processed_dict["category"],
             "summary": processed.summary,
             "official_link": official_link,
             "source_url": "",
