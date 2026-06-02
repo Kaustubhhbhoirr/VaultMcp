@@ -236,50 +236,34 @@ export default function VaultScreen({ vaultItems, onRefresh, onDeleteEntry, user
                         </div>
                       )}
 
-                      {item.mdLink && (
-                        <div className="flex gap-2 mt-2">
-                          <button 
-                            onClick={() => handleViewMd(item)}
-                            className="flex-1 py-3 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press cursor-pointer text-center"
-                          >
-                            [ VIEW MD ]
-                          </button>
-                          <button 
-                            onClick={async () => {
-                              try {
-                                const match = item.mdLink.match(/\/d\/(.*?)\/view/);
-                                const fileId = match ? match[1] : null;
-                                if (!fileId) throw new Error("Invalid Source link");
-
-                                const { fetchSourceFile } = await import('../utils/api.js');
-                                const text = await fetchSourceFile(fileId, );
-
-                                const blob = new Blob([text], { type: 'text/markdown' });
-                                const url = URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.href = url;
-                                a.download = `${item.title}.md`;
-                                a.click();
-                                URL.revokeObjectURL(url);
-                              } catch (err) {
-                                console.error("Download failed", err);
-                                alert("Download failed: " + err.message);
-                              }
-                            }}
-                            className="flex-1 py-3 bg-white text-black font-headline-md retro-border retro-outset active-press cursor-pointer text-center"
-                          >
-                            [ DOWNLOAD MD ]
-                          </button>
-                        </div>
-                      )}
-                      {!item.mdLink && (
+                      <div className="flex gap-2 mt-2">
                         <button 
                           onClick={() => handleViewMd(item)}
-                          className="w-full py-3 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press cursor-pointer opacity-50"
+                          className="flex-1 py-3 bg-black text-secondary-container font-headline-md retro-border retro-outset active-press cursor-pointer text-center"
                         >
                           [ VIEW INFO ]
                         </button>
-                      )}
+                        <button 
+                          onClick={() => {
+                            try {
+                              const mdContent = item.mdEntry || `# ${item.title}\n\n## Summary\n${item.summary}\n\n${item.exactPrompt ? `## Content\n${item.exactPrompt}\n` : ''}`;
+                              const blob = new Blob([mdContent], { type: 'text/markdown' });
+                              const url = URL.createObjectURL(blob);
+                              const a = document.createElement('a');
+                              a.href = url;
+                              a.download = `${item.title ? item.title.replace(/[^a-z0-9]/gi, '_').toLowerCase() : 'vault_entry'}.md`;
+                              a.click();
+                              URL.revokeObjectURL(url);
+                            } catch (err) {
+                              console.error("Download failed", err);
+                              alert("Download failed: " + err.message);
+                            }
+                          }}
+                          className="flex-1 py-3 bg-white text-black font-headline-md retro-border retro-outset active-press cursor-pointer text-center"
+                        >
+                          [ DOWNLOAD MD ]
+                        </button>
+                      </div>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
