@@ -378,6 +378,47 @@ def _safe_json(response: httpx.Response):
 
 # ─── Convenience: Convert to dict ────────────────────────────────────────────
 
+def process_mcp_compare(prompt: str, hf_token: str) -> List[dict]:
+    """Sends the comparison prompt to the LLM and parses the JSON response."""
+    messages = [
+        {"role": "user", "content": prompt}
+    ]
+    payload = {
+        "messages": messages,
+        "max_tokens": 1000,
+        "temperature": 0.2,
+    }
+    
+    headers = {
+        "Authorization": f"Bearer {hf_token}",
+        "Content-Type": "application/json",
+    }
+    
+    try:
+        with httpx.Client(timeout=REQUEST_TIMEOUT_SECONDS) as client:
+            response = client.post(HF_INFERENCE_URL, json=payload, headers=headers)
+            
+        if response.status_code == 401 or response.status_code == 403:
+            raise InvalidTokenError("Hugging Face API token is invalid or expired.")
+            
+        response.raise_for_status()
+        data = response.json()
+        
+        content = data["choices"][0]["message"]["content"]
+        
+        # Mistral might wrap the output in markdown block
+        match = re.search(r'\[\s*\{.*\}\s*\]', content, re.DOTALL)
+        if match:
+            json_str = match.group(0)
+            return json.loads(json_str)
+        else:
+            # Maybe the whole output is just the list
+            return json.loads(content)
+    except Exception as e:
+        logger.error(f"Failed to parse MCP compare JSON: {e}")
+        return []
+
+
 def result_to_dict(result: ProcessedContent) -> dict:
     """Convert a ProcessedContent to the standard JSON schema dict."""
     return {
