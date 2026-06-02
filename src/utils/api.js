@@ -141,16 +141,13 @@ export async function healthCheck() {
  * @param {string} hfToken - User's Hugging Face token
  * @returns {Promise<object>} Pipeline result
  */
-export async function processFile(file, hfToken, driveAccessToken = null, driveRefreshToken = null) {
+export async function processFile(file, hfToken, forceCategory = null) {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('hf_token', hfToken);
   
-  if (driveAccessToken) {
-    formData.append('drive_access_token', driveAccessToken);
-  }
-  if (driveRefreshToken) {
-    formData.append('drive_refresh_token', driveRefreshToken);
+  if (forceCategory) {
+    formData.append('force_category', forceCategory);
   }
 
   const res = await fetch(`${API_BASE}/process/file`, {

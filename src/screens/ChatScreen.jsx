@@ -28,9 +28,10 @@ export default function ChatScreen({ messages, onSendMessage, onSendFile, shared
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file && onSendFile) {
-      onSendFile(file);
+      onSendFile(file, inputVal);
     }
     e.target.value = null;
+    setInputVal('');
   };
 
   return (

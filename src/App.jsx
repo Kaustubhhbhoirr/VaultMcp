@@ -198,11 +198,27 @@ export default function App() {
     }
   }, [user.hfToken, setMessages, setVaultItems]);
 
-  const handleSendFile = useCallback(async (file) => {
+  const handleSendFile = useCallback(async (file, text = '') => {
     const hfToken = user.hfToken;
 
+    let forceCategory = null;
+    let cleanText = text.trim();
+    const slashMatch = cleanText.match(/^\/\s*(ai|dev|prompt|design|resource|other)\b/i);
+    if (slashMatch) {
+      const keyword = slashMatch[1].toLowerCase();
+      const catMap = {
+        'ai': 'AI Tools',
+        'dev': 'Dev Tools',
+        'prompt': 'Prompts',
+        'design': 'Design',
+        'resource': 'Resources',
+        'other': 'Other'
+      };
+      forceCategory = catMap[keyword];
+    }
+
     // Add user message with attached file info
-    const userMsg = { sender: 'user', text: `[Attached File: ${file.name}]`, isUrl: false };
+    const userMsg = { sender: 'user', text: forceCategory ? `[${forceCategory.toUpperCase()}] Attached File: ${file.name}` : `[Attached File: ${file.name}]`, isUrl: false };
     setMessages(prev => [...prev, userMsg]);
 
     if (!hfToken) {
@@ -235,8 +251,7 @@ export default function App() {
       const response = await processFile(
         file, 
         hfToken, 
-        null, 
-        null
+        forceCategory
       );
       const result = response.result;
 

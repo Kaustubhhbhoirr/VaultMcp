@@ -595,8 +595,7 @@ def extract_text_from_file(raw_bytes: bytes, filename: str) -> str:
 async def process_file(
     file: UploadFile = File(...),
     hf_token: str = Form(...),
-    drive_access_token: Optional[str] = Form(None),
-    drive_refresh_token: Optional[str] = Form(None),
+    force_category: Optional[str] = Form(None),
 ):
     """
     Process an uploaded file (PDF, text, etc.).
@@ -622,6 +621,8 @@ async def process_file(
     # Run through the same AI pipeline
     try:
         processed = process_text(text_for_ai, hf_token.strip())
+        final_category = force_category if force_category else "Other"
+        processed.category = final_category
         processed_dict = result_to_dict(processed)
     except AIInvalidTokenError as e:
         raise HTTPException(status_code=401, detail=f"HF token error: {e}")
