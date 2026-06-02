@@ -22,3 +22,9 @@ python-dotenv
 
 # ─── File Upload Support (FastAPI multipart) ────────────
 python-multipart
+
+# ─── File Parsing ───────────────────────────────────────
+PyMuPDF
+python-docx
+openpyxl
+python-pptx
