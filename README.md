@@ -264,8 +264,9 @@ Browser → Backend (stateless processing) → Firestore (per-user subcollection
 ---
 
 ## 🗺️ Roadmap
-
+ 
 ### V1.0 — PWA ✅ (Live)
+- [x] **Fully installable PWA** — download & install on Android, iOS, or Desktop
 - [x] Retro Win95 UI — 4 screens
 - [x] 7 input types (URL, GitHub, PDF, DOCX, XLSX, PPTX, plain text)
 - [x] Qwen 2.5 Coder 32B structuring
@@ -273,17 +274,18 @@ Browser → Backend (stateless processing) → Firestore (per-user subcollection
 - [x] FastMCP SSE server — 3 MCP tools
 - [x] MCP config generator in Settings
 - [x] Android PWA share target
-
+ 
 ### V1.1 — Security & Cleanup *(Q3 2026)*
 - [ ] Firestore Security Rules (authenticated reads)
 - [ ] Rate limiting on `/process`
 - [ ] HF Space keep-alive cron
 - [ ] Remove legacy dead code
-
-### V2 — Browser Extension *(Q4 2026)*
-- [ ] One-click "Save to VaultMCP" from any page
-- [ ] Auto-detect tools on the page
-
+ 
+### V2 — Browser Extension & Social Integration *(Q4 2026)*
+- [ ] Direct options for sending Instagram Reels and YouTube Shorts
+- [ ] One-click "Save to VaultMCP" from any page via extension
+- [ ] Auto-detect tools on the active page
+ 
 ### V3 — Native App *(2027)*
 - [ ] React Native (iOS + Android)
 - [ ] Native share sheet
