@@ -183,11 +183,10 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onLog
                   const config = JSON.stringify({
                     mcpServers: {
                       vaultmcp: {
-                        command: "python",
+                        command: "npx",
                         args: [
-                          "-m", 
-                          "mcp", 
-                          "run",
+                          "-y", 
+                          "mcp-remote", 
                           `https://kaustubh5934-vaultmcp-backend.hf.space/mcp/sse?uid=${user.uid}`
                         ]
                       }
