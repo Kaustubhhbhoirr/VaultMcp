@@ -9,8 +9,9 @@ uvicorn[standard]
 # ─── Audio Extraction ───────────────────────────────────
 yt-dlp
 
-# ─── HTTP Client (HF API, web scraping) ─
-httpx
+# ─── HTTP Client (HF API, web scraping) ─────────────────────────────────────────
+requests
+huggingface_hub
 
 
 

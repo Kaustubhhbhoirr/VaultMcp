@@ -183,11 +183,11 @@ def detect_input_type(content: str) -> str:
     content = content.strip()
     logger.info(f"[detect_input_type] Evaluating content: {content}")
 
-    if GITHUB_RE.match(content):
+    if GITHUB_RE.search(content):
         logger.info("[detect_input_type] Match found: github")
         return "github"
 
-    if GENERIC_URL_RE.match(content):
+    if GENERIC_URL_RE.search(content):
         logger.info("[detect_input_type] Match found: website")
         return "website"
 
@@ -760,53 +760,28 @@ async def mcp_compare(request: MCPCompareRequest):
 
 from mcp.server.fastmcp import FastMCP
 
-async def get_vault_from_firestore(uid: str) -> str:
-    if not db:
-        return "Vault is empty or missing (Firebase Admin not initialized)."
-    try:
-        docs = db.collection('users').document(uid).collection('vaultItems').stream()
-        md = "# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n\n---\n\n"
-        count = 0
-        for doc in docs:
-            count += 1
-            data = doc.to_dict()
-            title = data.get("title", "")
-            category = data.get("category", "")
-            date = data.get("date", "")
-            summary = data.get("summary", "")
-            exactPrompt = data.get("exactPrompt", "")
-            
-            md += f"## [CATEGORY: {category}]\n\n### {title}\n"
-            if summary:
-                md += f"- Summary: {summary}\n"
-            if exactPrompt:
-                md += f"- Exact Prompt: {exactPrompt}\n"
-            md += f"- Saved on: {date}\n\n"
-            
-        if count == 0:
-            return "Vault is empty or missing."
-        return md
-    except Exception as e:
-        return f"Error parsing vault data: {e}"
-
-
 import httpx
+
 async def get_vault_from_firestore(uid: str) -> str:
-    url = f"https://firestore.googleapis.com/v1/projects/vaultmcp-4431d/databases/(default)/documents/users/{uid}"
+    url = f"https://firestore.googleapis.com/v1/projects/vaultmcp-4431d/databases/(default)/documents/users/{uid}/vaultItems"
     async with httpx.AsyncClient() as client:
-        resp = await client.get(url)
-        if resp.status_code == 200:
-            data = resp.json()
-            try:
-                items = data.get("fields", {}).get("vaultItems", {}).get("arrayValue", {}).get("values", [])
+        try:
+            resp = await client.get(url, timeout=15.0)
+            if resp.status_code == 200:
+                data = resp.json()
+                documents = data.get("documents", [])
+                if not documents:
+                    return "Vault is empty or missing."
+                
                 md = "# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n\n---\n\n"
-                for item in items:
-                    fields = item.get("mapValue", {}).get("fields", {})
+                for doc in documents:
+                    fields = doc.get("fields", {})
                     title = fields.get("title", {}).get("stringValue", "")
                     category = fields.get("category", {}).get("stringValue", "")
                     date = fields.get("date", {}).get("stringValue", "")
                     summary = fields.get("summary", {}).get("stringValue", "")
                     exactPrompt = fields.get("exactPrompt", {}).get("stringValue", "")
+                    
                     md += f"## [CATEGORY: {category}]\n\n### {title}\n"
                     if summary:
                         md += f"- Summary: {summary}\n"
@@ -814,9 +789,13 @@ async def get_vault_from_firestore(uid: str) -> str:
                         md += f"- Exact Prompt: {exactPrompt}\n"
                     md += f"- Saved on: {date}\n\n"
                 return md
-            except Exception as e:
-                return f"Error parsing vault data: {e}"
-        return "Vault is empty or missing."
+            else:
+                return f"Error fetching vault: HTTP {resp.status_code}"
+        except Exception as e:
+            return f"Error parsing vault data: {e}"
+
+
+
 
 
 # Create MCP server with host 0.0.0.0 to allow HF space proxying
@@ -853,24 +832,18 @@ async def compare_project(project_readme: str) -> str:
     vault_content = await get_vault_from_firestore(uid)
     if not vault_content or "Vault is empty" in vault_content:
         return "Your Vault is currently empty! Add some tools to your VaultMCP first before running the comparison."
-    
-    # Use HF_TOKEN from environment variables
-    hf_token = os.getenv("HF_TOKEN")
-    if not hf_token:
-        return "Error: HF_TOKEN is not configured on the server"
         
-    prompt = f"""
-    Project README:
-    {project_readme[:2000]}
+    return f"""
+INSTRUCTION TO IDE AI:
+You have been provided with the user's Project README and the contents of their VaultMCP knowledge base.
+Your task is to analyze the README and recommend the most relevant tools from their vault that could be used to build this project.
 
-    Available tools in vault:
-    {vault_content[:3000]}
+USER'S PROJECT README:
+{project_readme}
 
-    List the most relevant tools from the vault for this project.
-    Format: tool name — why it fits
-    """
-    result = process_mcp_compare(prompt, hf_token)
-    return result
+USER'S VAULT CONTENTS:
+{vault_content}
+"""
 
 # Mount MCP server to FastAPI
 app.mount("/mcp", mcp_server.sse_app())
