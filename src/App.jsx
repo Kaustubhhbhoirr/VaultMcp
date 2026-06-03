@@ -244,8 +244,6 @@ export default function App() {
       setVaultItems(prev => [newVaultItem, ...prev]);
       saveToFirestore(newVaultItem);
 
-      // Remove "processing" message
-      setMessages(prev => prev.filter(m => m.id !== msgId));
     } catch (err) {
       let errMsg = err.message || "● Could not process this. Try again or paste as plain text";
       if (err.message && (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network'))) {
@@ -350,8 +348,6 @@ export default function App() {
       setVaultItems(prev => [newVaultItem, ...prev]);
       saveToFirestore(newVaultItem);
 
-      // Remove "processing" message
-      setMessages(prev => prev.filter(m => m.id !== msgId));
     } catch (err) {
       let errMsg = err.message || "● Could not process this file. Try again.";
       if (err.message && (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network'))) {
