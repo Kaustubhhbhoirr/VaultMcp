@@ -22,7 +22,6 @@ export async function processContent(content, hfToken, forceCategory = null) {
     },
     body: JSON.stringify({
       content,
-      hf_token: hfToken,
       content_type: 'auto',
       force_category: forceCategory,
     }),
@@ -144,7 +143,6 @@ export async function healthCheck() {
 export async function processFile(file, hfToken, forceCategory = null) {
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('hf_token', hfToken);
   
   if (forceCategory) {
     formData.append('force_category', forceCategory);
@@ -152,6 +150,9 @@ export async function processFile(file, hfToken, forceCategory = null) {
 
   const res = await fetch(`${API_BASE}/process/file`, {
     method: 'POST',
+    headers: {
+      'X-HF-Token': hfToken,
+    },
     body: formData,
   });
 

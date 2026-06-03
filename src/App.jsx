@@ -9,7 +9,7 @@ import AuthCallback from './screens/AuthCallback';
 import { isValidUrl, formatRetroDate } from './utils/helpers';
 import { processContent, healthCheck, processFile } from './utils/api';
 import { db } from './firebase';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, collection, getDocs, deleteDoc, writeBatch } from 'firebase/firestore';
 import { useToast } from './components/RetroToast';
 
 // Initial chat history matching the designs
@@ -31,7 +31,6 @@ export default function App() {
     uid: '',
     name: '',
     hfToken: '',
-
   });
 
   const vaultCacheKey = user.uid ? `vaultmcp_vault_items_${user.uid}` : 'vaultmcp_vault_items';
@@ -65,24 +64,91 @@ export default function App() {
     };
   }, []);
 
-  // ─── Firestore Sync ──────────────────────────────
-  useEffect(() => {
-    if (user.uid && vaultItems.length > 0) {
-      const docRef = doc(db, 'users', user.uid);
-      setDoc(docRef, { vaultItems }, { merge: true }).catch(console.error);
-    }
-  }, [vaultItems, user.uid]);
-
+  // ─── Firestore Subcollection Sync & Offline Queue ─────────────────────
+  // Load existing vault items from subcollection on login
   useEffect(() => {
     if (user.uid) {
-      const docRef = doc(db, 'users', user.uid);
-      getDoc(docRef).then(snap => {
-        if (snap.exists() && snap.data().vaultItems) {
-          setVaultItems(snap.data().vaultItems);
+      const fetchVault = async () => {
+        try {
+          const querySnapshot = await getDocs(collection(db, 'users', user.uid, 'vaultItems'));
+          const items = [];
+          querySnapshot.forEach((doc) => {
+            items.push({ id: Number(doc.id), ...doc.data() });
+          });
+          // Sort by ID descending (newest first)
+          items.sort((a, b) => b.id - a.id);
+          setVaultItems(items);
+        } catch (err) {
+          console.error("Failed to fetch vault from Firestore:", err);
         }
-      }).catch(console.error);
+      };
+      fetchVault();
     }
   }, [user.uid, setVaultItems]);
+
+  // Process offline queue when coming online
+  useEffect(() => {
+    const processQueue = async () => {
+      if (!user.uid || !navigator.onLine) return;
+      const queue = JSON.parse(localStorage.getItem(`syncQueue_${user.uid}`) || '[]');
+      if (queue.length === 0) return;
+      
+      console.log("Processing offline sync queue...", queue.length, "items");
+      const batch = writeBatch(db);
+      queue.forEach(item => {
+        const docRef = doc(db, 'users', user.uid, 'vaultItems', item.id.toString());
+        batch.set(docRef, item, { merge: true });
+      });
+      
+      try {
+        await batch.commit();
+        localStorage.setItem(`syncQueue_${user.uid}`, '[]');
+        showToast('Offline items synced!', 'success');
+      } catch (err) {
+        console.error("Failed to sync offline queue:", err);
+      }
+    };
+    
+    window.addEventListener('online', processQueue);
+    processQueue(); // Check on mount
+    return () => window.removeEventListener('online', processQueue);
+  }, [user.uid, showToast]);
+
+  const saveToFirestore = async (item) => {
+    if (!user.uid) return;
+    try {
+      const docRef = doc(db, 'users', user.uid, 'vaultItems', item.id.toString());
+      await setDoc(docRef, item, { merge: true });
+    } catch (err) {
+      console.error("Offline: Queuing item for sync", err);
+      const queue = JSON.parse(localStorage.getItem(`syncQueue_${user.uid}`) || '[]');
+      queue.push(item);
+      localStorage.setItem(`syncQueue_${user.uid}`, JSON.stringify(queue));
+    }
+  };
+
+  const deleteFromFirestore = async (id) => {
+    if (!user.uid) return;
+    try {
+      await deleteDoc(doc(db, 'users', user.uid, 'vaultItems', id.toString()));
+    } catch (err) {
+      console.error("Failed to delete from Firestore", err);
+    }
+  };
+
+  const clearFirestoreVault = async (uid) => {
+    if (!uid) return;
+    try {
+      const querySnapshot = await getDocs(collection(db, 'users', uid, 'vaultItems'));
+      const batch = writeBatch(db);
+      querySnapshot.forEach((docSnap) => {
+        batch.delete(docSnap.ref);
+      });
+      await batch.commit();
+    } catch (err) {
+      console.error("Failed to clear vault in Firestore", err);
+    }
+  };
 
   // ─── Real API call: process content ───────────────────────────────────
   const handleSendMessage = useCallback(async (text) => {
@@ -168,19 +234,18 @@ export default function App() {
       const newVaultItem = {
         id: Date.now(),
         title: result.title,
-        category: result.category.toUpperCase(),
-        date: result.saved_on,
+        category: result.category,
         summary: result.summary,
-        exactPrompt: result.exact_prompt || '',
-        sourceUrl: result.source_url || result.official_link || '',
-        officialLink: result.official_link || '',
+        exactPrompt: result.exact_prompt || cleanText, // Keep raw input exactly
+        date: formatRetroDate(new Date()),
         mdEntry: result.md_entry,
         locked: false,
       };
       setVaultItems(prev => [newVaultItem, ...prev]);
+      saveToFirestore(newVaultItem);
 
-
-
+      // Remove "processing" message
+      setMessages(prev => prev.filter(m => m.id !== msgId));
     } catch (err) {
       let errMsg = err.message || "● Could not process this. Try again or paste as plain text";
       if (err.message && (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network'))) {
@@ -283,9 +348,10 @@ export default function App() {
         locked: false,
       };
       setVaultItems(prev => [newVaultItem, ...prev]);
+      saveToFirestore(newVaultItem);
 
-
-
+      // Remove "processing" message
+      setMessages(prev => prev.filter(m => m.id !== msgId));
     } catch (err) {
       let errMsg = err.message || "● Could not process this file. Try again.";
       if (err.message && (err.message.toLowerCase().includes('fetch') || err.message.toLowerCase().includes('network'))) {
@@ -354,18 +420,10 @@ export default function App() {
   };
 
   const handleClearVault = async () => {
+    await clearFirestoreVault(user.uid);
     setVaultItems([]);
     setMessages([ ...INITIAL_MESSAGES ]);
     showToast('Vault and chat history cleared', 'success');
-
-    if (user.uid) {
-      try {
-        const docRef = doc(db, 'users', user.uid);
-        await setDoc(docRef, { vaultItems: [] }, { merge: true });
-      } catch (err) {
-        console.error("Failed to clear vault remotely", err);
-      }
-    }
   };
 
   const handleLogout = () => {
@@ -374,7 +432,6 @@ export default function App() {
       name: '',
       email: '',
       hfToken: '',
-
     });
     setVaultItems([]);
     setMessages(INITIAL_MESSAGES);
@@ -461,6 +518,7 @@ export default function App() {
             vaultItems={vaultItems} 
             onDeleteEntry={(id, newMdContent) => {
               setVaultItems(prev => prev.filter(item => item.id !== id));
+              deleteFromFirestore(id);
             }}
             user={user}
           />

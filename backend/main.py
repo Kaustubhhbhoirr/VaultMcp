@@ -25,6 +25,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from pydantic import BaseModel
 import httpx
+import firebase_admin
+from firebase_admin import credentials, firestore
+
+load_dotenv()
+
+# Initialize Firebase Admin
+firebase_creds_json = os.getenv('FIREBASE_SERVICE_ACCOUNT')
+if firebase_creds_json:
+    try:
+        cred = credentials.Certificate(json.loads(firebase_creds_json))
+        firebase_admin.initialize_app(cred)
+        db = firestore.client()
+    except Exception as e:
+        print(f"Failed to initialize Firebase Admin: {e}")
+        db = None
+else:
+    print("WARNING: FIREBASE_SERVICE_ACCOUNT not set. Firestore integration will fail.")
+    db = None
 
 # Configure logging
 logging.basicConfig(
@@ -93,6 +111,8 @@ async def add_coop_header(request, call_next):
 @app.middleware("http")
 async def extract_drive_token(request: Request, call_next):
     token = request.headers.get("x-vault-uid")
+    if not token:
+        token = request.query_params.get("uid")
     if token:
         drive_token_var.set(token)
     return await call_next(request)
@@ -103,7 +123,6 @@ async def extract_drive_token(request: Request, call_next):
 class ProcessRequest(BaseModel):
     """Body for POST /process."""
     content: str
-    hf_token: str                         # User's Hugging Face token (required)
     content_type: Optional[str] = "auto"  # "url" | "text" | "auto"
     force_category: Optional[str] = None  # User overridden category
 
@@ -368,7 +387,7 @@ async def health_check():
 
 
 @app.post("/process")
-async def process_content(request: ProcessRequest):
+async def process_content(request: ProcessRequest, x_hf_token: str = Header(None)):
     """
     Main processing endpoint — the entire VaultMCP pipeline.
 
@@ -378,12 +397,12 @@ async def process_content(request: ProcessRequest):
       Plain text            → AI structure → web search → MD
     """
     content = request.content.strip()
-    hf_token = request.hf_token.strip()
+    hf_token = x_hf_token.strip() if x_hf_token else ""
 
     if not content:
         raise HTTPException(status_code=400, detail="Content is empty.")
     if not hf_token:
-        raise HTTPException(status_code=400, detail="Hugging Face token is required.")
+        raise HTTPException(status_code=400, detail="Hugging Face token is required in X-HF-Token header.")
 
     # ── Step 1: Detect input type ────────────────────────────────────────
     if request.content_type and request.content_type != "auto":
@@ -608,15 +627,16 @@ def extract_text_from_file(raw_bytes: bytes, filename: str) -> str:
 @app.post("/process/file")
 async def process_file(
     file: UploadFile = File(...),
-    hf_token: str = Form(...),
     force_category: Optional[str] = Form(None),
+    x_hf_token: str = Header(None),
 ):
     """
     Process an uploaded file (PDF, text, etc.).
     Reads file content as text and runs through the AI pipeline.
     """
-    if not hf_token or not hf_token.strip():
-        raise HTTPException(status_code=400, detail="Hugging Face token is required.")
+    if not x_hf_token or not x_hf_token.strip():
+        raise HTTPException(status_code=400, detail="Hugging Face token is required in X-HF-Token header.")
+    hf_token = x_hf_token.strip()
 
     try:
         raw_bytes = await file.read()
@@ -729,8 +749,9 @@ async def mcp_compare(request: MCPCompareRequest):
     Available tools in vault:
     {vault_content[:3000]}
     
-    Return JSON list of relevant tools:
-    [{{"tool": "name", "reason": "why it fits", "link": "url"}}]
+    Return a list of relevant tools for this project from the vault.
+    Format:
+    - Tool Name: Why it fits
     """
     
     result = process_mcp_compare(prompt, request.hf_token)
@@ -739,6 +760,36 @@ async def mcp_compare(request: MCPCompareRequest):
 
 from mcp.server.fastmcp import FastMCP
 
+async def get_vault_from_firestore(uid: str) -> str:
+    if not db:
+        return "Vault is empty or missing (Firebase Admin not initialized)."
+    try:
+        docs = db.collection('users').document(uid).collection('vaultItems').stream()
+        md = "# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n\n---\n\n"
+        count = 0
+        for doc in docs:
+            count += 1
+            data = doc.to_dict()
+            title = data.get("title", "")
+            category = data.get("category", "")
+            date = data.get("date", "")
+            summary = data.get("summary", "")
+            exactPrompt = data.get("exactPrompt", "")
+            
+            md += f"## [CATEGORY: {category}]\n\n### {title}\n"
+            if summary:
+                md += f"- Summary: {summary}\n"
+            if exactPrompt:
+                md += f"- Exact Prompt: {exactPrompt}\n"
+            md += f"- Saved on: {date}\n\n"
+            
+        if count == 0:
+            return "Vault is empty or missing."
+        return md
+    except Exception as e:
+        return f"Error parsing vault data: {e}"
+
+
 import httpx
 async def get_vault_from_firestore(uid: str) -> str:
     url = f"https://firestore.googleapis.com/v1/projects/vaultmcp-4431d/databases/(default)/documents/users/{uid}"
@@ -768,37 +819,8 @@ async def get_vault_from_firestore(uid: str) -> str:
         return "Vault is empty or missing."
 
 
-import httpx
-async def get_vault_from_firestore(uid: str) -> str:
-    url = f"https://firestore.googleapis.com/v1/projects/vaultmcp-4431d/databases/(default)/documents/users/{uid}"
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(url)
-        if resp.status_code == 200:
-            data = resp.json()
-            try:
-                items = data.get("fields", {}).get("vaultItems", {}).get("arrayValue", {}).get("values", [])
-                md = "# VaultMCP Vault\n\n> Save what you scroll. Use what you saved.\n\n---\n\n"
-                for item in items:
-                    fields = item.get("mapValue", {}).get("fields", {})
-                    title = fields.get("title", {}).get("stringValue", "")
-                    category = fields.get("category", {}).get("stringValue", "")
-                    date = fields.get("date", {}).get("stringValue", "")
-                    summary = fields.get("summary", {}).get("stringValue", "")
-                    exactPrompt = fields.get("exactPrompt", {}).get("stringValue", "")
-                    md += f"## [CATEGORY: {category}]\n\n### {title}\n"
-                    if summary:
-                        md += f"- Summary: {summary}\n"
-                    if exactPrompt:
-                        md += f"- Exact Prompt: {exactPrompt}\n"
-                    md += f"- Saved on: {date}\n\n"
-                return md
-            except Exception as e:
-                return f"Error parsing vault data: {e}"
-        return "Vault is empty or missing."
-
-
-# Create MCP server
-mcp_server = FastMCP("VaultMCP")
+# Create MCP server with host 0.0.0.0 to allow HF space proxying
+mcp_server = FastMCP("VaultMCP", host="0.0.0.0")
 
 @mcp_server.tool()
 async def get_vault() -> str:
@@ -827,9 +849,9 @@ async def compare_project(project_readme: str) -> str:
     """Compare project README with vault to find relevant tools"""
     uid = drive_token_var.get()
     if not uid:
-        return "Error: Missing X-Vault-Uid header (Firebase UID)"
+        return "Error: Missing X-Vault-Uid header or ?uid= parameter (Firebase UID)"
     vault_content = await get_vault_from_firestore(uid)
-    if not vault_content:
+    if not vault_content or "Vault is empty" in vault_content:
         return "Your Vault is currently empty! Add some tools to your VaultMCP first before running the comparison."
     
     # Use HF_TOKEN from environment variables
@@ -847,8 +869,8 @@ async def compare_project(project_readme: str) -> str:
     List the most relevant tools from the vault for this project.
     Format: tool name — why it fits
     """
-    result = process_text(prompt, hf_token)
-    return result.summary
+    result = process_mcp_compare(prompt, hf_token)
+    return result
 
 # Mount MCP server to FastAPI
 app.mount("/mcp", mcp_server.sse_app())

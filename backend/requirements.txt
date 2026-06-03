@@ -28,3 +28,4 @@ python-pptx
 
 # ─── MCP Protocol ───────────────────────────────────────
 mcp
+firebase-admin

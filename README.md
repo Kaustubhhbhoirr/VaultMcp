@@ -194,3 +194,25 @@ MIT — use it, fork it, ship it.
 <div align="center">
 <i>"We don't want your data. We don't want your money. We just want you to actually use what you save."</i>
 </div>
+
+---
+
+## MCP Integration (Model Context Protocol)
+
+VaultMCP includes a remote MCP server that exposes your Vault and the powerful `compare_project` tool to AI IDEs (like Cursor, Claude Desktop, and Antigravity).
+
+For IDEs that do not natively support remote SSE URLs, a Python proxy script (`mcp_proxy.py`) is included. 
+Add this to your IDE's `mcp_config.json`:
+
+```json
+{
+    "mcpServers": {
+        "VaultMCP": {
+            "command": "python",
+            "args": [
+                "path/to/vaultmcp/mcp_proxy.py"
+            ]
+        }
+    }
+}
+```
