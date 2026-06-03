@@ -87,7 +87,7 @@ graph TB
     end
 
     subgraph "User's IDE"
-        G["Claude / Cursor / Gemini"]
+        G["Claude / Cursor / Antigravity"]
         H["npx mcp-remote<br/>(SSE → stdio bridge)"]
     end
 
