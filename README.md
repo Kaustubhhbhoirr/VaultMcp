@@ -22,7 +22,7 @@
 [![Backend](https://img.shields.io/badge/backend-HuggingFace%20Spaces-yellow?style=flat-square)](https://kaustubh5934-vaultmcp-backend.hf.space)
 [![Firebase](https://img.shields.io/badge/database-Firestore-orange?style=flat-square)](#)
 [![Antigravity](https://img.shields.io/badge/Google%20Antigravity-Compatible-4285F4?style=flat-square&logo=google&logoColor=white)](https://antigravity.google/)
-[![Stitch](https://img.shields.io/badge/Google%20Stitch-Designed-4285F4?style=flat-square&logo=google&logoColor=white)](#)
+[![Stitch](https://img.shields.io/badge/Google%20Stitch-Designed-4285F4?style=flat-square&logo=google&logoColor=white)](https://stitch.withgoogle.com)
 
 *Built with Google Antigravity · Google Stitch · Firebase · Hugging Face Spaces*
 
@@ -66,20 +66,6 @@ One chatbox. Paste anything. AI structures it. Saved forever. Used in your IDE.
 [![Watch Demo](https://img.shields.io/badge/▶_Watch_Demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/nDrAqqr_7sQ)
 
 > ⚠️ **To use the app:** You'll need a free [Hugging Face account](https://huggingface.co) and a Read-permission API token. The onboarding screen will guide you through it.
-
----
-
-## 🎥 Demo & Setup Videos
-
-Not everyone needs to self-host. If you just want to use the live app, only the Hugging Face token setup is required.
-
-| Video | What it covers |
-|-------|---------------|
-| [Full Demo](https://youtu.be/nDrAqqr_7sQ) | App walkthrough — Chat, Vault, MCP in action |
-| Hugging Face Token Setup | How to create a free HF account and get a Read token |
-| MCP Setup in Claude / Cursor | How to connect VaultMCP to your IDE using npx mcp-remote |
-
-> ℹ️ **Note:** Self-hosting (frontend + backend) is only needed if you want to run your own instance. See Quick Start below.
 
 ---
 
@@ -282,7 +268,7 @@ Browser → Backend (stateless processing) → Firestore (per-user subcollection
 ---
 
 ## 🗺️ Roadmap
- 
+
 ### V1.0 — PWA ✅ (Live)
 - [x] **Fully installable PWA** — download & install on Android, iOS, or Desktop
 - [x] Retro Win95 UI — 4 screens
@@ -292,18 +278,18 @@ Browser → Backend (stateless processing) → Firestore (per-user subcollection
 - [x] FastMCP SSE server — 3 MCP tools
 - [x] MCP config generator in Settings
 - [x] Android PWA share target
- 
+
 ### V1.1 — Security & Cleanup *(Q3 2026)*
 - [ ] Firestore Security Rules (authenticated reads)
 - [ ] Rate limiting on `/process`
 - [ ] HF Space keep-alive cron
 - [ ] Remove legacy dead code
- 
+
 ### V2 — Browser Extension & Social Integration *(Q4 2026)*
 - [ ] Direct options for sending Instagram Reels and YouTube Shorts
 - [ ] One-click "Save to VaultMCP" from any page via extension
 - [ ] Auto-detect tools on the active page
- 
+
 ### V3 — Native App *(2027)*
 - [ ] React Native (iOS + Android)
 - [ ] Native share sheet
@@ -312,7 +298,7 @@ Browser → Backend (stateless processing) → Firestore (per-user subcollection
 
 ## 🤝 Contributing
 
-Open source. No ads. No monetization. Built for developers by developers.
+Open source. No ads. No monetisation. Built for developers by developers.
 
 ---
 
@@ -331,5 +317,5 @@ MIT — use it, fork it, ship it.
 ---
 
 <div align="center">
-<i>"We don't want your data. We don't want your money. We just want you to actually use what you save."</i>
+<i>"Yes, another tool to save your tools. But this one actually works."</i>
 </div>
