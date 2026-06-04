@@ -62,6 +62,7 @@ One chatbox. Paste anything. AI structures it. Saved forever. Used in your IDE.
 | 🌐 **App** | [vault-mcp-4ssi.vercel.app](https://vault-mcp-4ssi.vercel.app) |
 | ⚙️ **Backend** | [kaustubh5934-vaultmcp-backend.hf.space](https://kaustubh5934-vaultmcp-backend.hf.space) |
 | 📦 **GitHub** | [github.com/Kaustubhhbhoirr/VaultMcp](https://github.com/Kaustubhhbhoirr/VaultMcp) |
+| 🎥 **Demo** | [Watch on YouTube](https://youtu.be/nDrAqqr_7sQ) |
 
 > ⚠️ **Before trying the demo:** You'll need a free [Hugging Face account](https://huggingface.co) and a Read-permission API token. The onboarding screen will ask for it on first launch.
 
