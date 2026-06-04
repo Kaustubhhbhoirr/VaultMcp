@@ -21,7 +21,7 @@
 [![Cost](https://img.shields.io/badge/cost-%240-black?style=flat-square)](#)
 [![Backend](https://img.shields.io/badge/backend-HuggingFace%20Spaces-yellow?style=flat-square)](https://kaustubh5934-vaultmcp-backend.hf.space)
 [![Firebase](https://img.shields.io/badge/database-Firestore-orange?style=flat-square)](#)
-[![Antigravity](https://img.shields.io/badge/Google%20Antigravity-Compatible-4285F4?style=flat-square&logo=google&logoColor=white)](https://antigravity-ide.com)
+[![Antigravity](https://img.shields.io/badge/Google%20Antigravity-Compatible-4285F4?style=flat-square&logo=google&logoColor=white)](https://antigravity.google/)
 [![Stitch](https://img.shields.io/badge/Google%20Stitch-Designed-4285F4?style=flat-square&logo=google&logoColor=white)](#)
 
 *Built with Google Antigravity · Google Stitch · Firebase · Hugging Face Spaces*
@@ -158,7 +158,7 @@ VaultMCP exposes your personal knowledge base to **any MCP-compatible AI coding 
 
 | Tool | Role |
 |------|------|
-| [Google Antigravity](https://antigravity.dev) | Agentic IDE used to build and iterate the entire project |
+| [Google Antigravity](https://antigravity.google/) | Agentic IDE used to build and iterate the entire project |
 | [Google Stitch](https://stitch.withgoogle.com) | UI design and frontend component generation |
 | [Firebase](https://firebase.google.com) | Anonymous Auth + Cloud Firestore database |
 | [Hugging Face Spaces](https://huggingface.co/spaces) | Free Docker hosting for FastAPI backend |
