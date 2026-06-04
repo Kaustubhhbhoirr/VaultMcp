@@ -187,7 +187,9 @@ export default function SettingsScreen({ user, onUpdateUser, onClearVault, onLog
                         args: [
                           "-y", 
                           "mcp-remote", 
-                          `https://kaustubh5934-vaultmcp-backend.hf.space/mcp/sse?uid=${user.uid}`
+                          `https://kaustubh5934-vaultmcp-backend.hf.space/mcp/sse?uid=${user.uid}`,
+                          "--transport",
+                          "sse-only"
                         ]
                       }
                     }
