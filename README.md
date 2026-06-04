@@ -65,7 +65,7 @@ One chatbox. Paste anything. AI structures it. Saved forever. Used in your IDE.
 
 [![Watch Demo](https://img.shields.io/badge/▶_Watch_Demo-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/nDrAqqr_7sQ)
 
-> ⚠️ **Before trying the demo:** You'll need a free [Hugging Face account](https://huggingface.co) and a Read-permission API token. The onboarding screen will ask for it on first launch.
+> ⚠️ **To use the app:** You'll need a free [Hugging Face account](https://huggingface.co) and a Read-permission API token. The onboarding screen will guide you through it.
 
 ---
 
