@@ -141,7 +141,9 @@ VaultMCP exposes your personal knowledge base to **any MCP-compatible AI coding 
       "args": [
         "-y",
         "mcp-remote",
-        "https://kaustubh5934-vaultmcp-backend.hf.space/mcp/sse?uid=YOUR_FIREBASE_UID"
+        "https://kaustubh5934-vaultmcp-backend.hf.space/mcp/sse?uid=YOUR_FIREBASE_UID",
+        "--transport",
+        "sse-only"
       ]
     }
   }
