@@ -67,6 +67,20 @@ One chatbox. Paste anything. AI structures it. Saved forever. Used in your IDE.
 
 ---
 
+## 🎥 Demo & Setup Videos
+
+Not everyone needs to self-host. If you just want to use the live app, only the Hugging Face token setup is required.
+
+| Video | What it covers |
+|-------|---------------|
+| [Full Demo](https://youtu.be/nDrAqqr_7sQ) | App walkthrough — Chat, Vault, MCP in action |
+| Hugging Face Token Setup | How to create a free HF account and get a Read token |
+| MCP Setup in Claude / Cursor | How to connect VaultMCP to your IDE using npx mcp-remote |
+
+> ℹ️ **Note:** Self-hosting (frontend + backend) is only needed if you want to run your own instance. See Quick Start below.
+
+---
+
 ## 🏗️ Architecture
 
 ```mermaid
